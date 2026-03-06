@@ -19,7 +19,7 @@ DerivedData/
 !default.perspectivev3
 xcuserdata/
 
-# Build output
+# Build output (keep DMG, exclude everything else)
 build/IPMsgX.app
 build/AppIcon.iconset
 build/*.zip
@@ -37,9 +37,11 @@ build/assetcatalog_generated_info.plist
 *.p12
 *.der
 
-# Logs and debug files
-WORKSPACE/console-app-log*.txt
-WORKSPACE/ipmgx-m2pro-mba-error.txt
+# Original reference source — not owned by this project
+source/
+
+# Workspace / scratch files
+WORKSPACE/
 
 # Editor
 .vscode/
