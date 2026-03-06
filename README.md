@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="IPMsgX/Resources/Assets.xcassets/AppIcon.appiconset/icon_128x128.png" width="128" alt="IPMsgX icon"/>
+</p>
+
 # IPMsgX for macOS
 
 A modern, native macOS client for the [IP Messenger](https://ipmsg.org) LAN messaging protocol — built from scratch in Swift and SwiftUI.
@@ -34,7 +38,7 @@ IP Messenger is a lightweight, serverless instant messaging protocol for local a
 
 ## Installation
 
-Download the latest release DMG from the [Releases](../../releases) page, open it, and drag **IPMsgX.app** to your Applications folder.
+Download the latest **IPMsgX.dmg** from the [Releases](https://github.com/yogiee/IPMsgX/releases) page, open it, and drag **IPMsgX.app** to your Applications folder.
 
 > **Note:** IPMsgX is ad-hoc signed and not notarized. On first launch, right-click the app and choose **Open** to bypass Gatekeeper.
 
