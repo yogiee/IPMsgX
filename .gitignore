@@ -1,0 +1,47 @@
+# Swift / SPM
+.build/
+.swiftpm/
+*.o
+*.d
+
+# Xcode
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+DerivedData/
+*.moved-aside
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata/
+
+# Build output
+build/IPMsgX.app
+build/AppIcon.iconset
+build/*.zip
+build/assetcatalog_generated_info.plist
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# RSA private keys — never commit these
+*.key
+*.pem
+*.p12
+*.der
+
+# Logs and debug files
+WORKSPACE/console-app-log*.txt
+WORKSPACE/ipmgx-m2pro-mba-error.txt
+
+# Editor
+.vscode/
+*.swp
+*.swo

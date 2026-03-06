@@ -1,0 +1,79 @@
+/* IPMsgX 日本語ローカリゼーション */
+
+/* General */
+"app.name" = "IPMsgX";
+"online" = "オンライン";
+"offline" = "オフライン";
+
+/* Main Window */
+"sidebar.title" = "ユーザー";
+"sidebar.search" = "ユーザーを検索";
+"sidebar.no_users" = "オンラインユーザーなし";
+"sidebar.no_users.description" = "ローカルネットワーク上のユーザーがここに表示されます。";
+
+/* Send Window */
+"send.title" = "新規メッセージ";
+"send.search_users" = "ユーザーを検索";
+"send.message_placeholder" = "メッセージを入力...";
+"send.seal" = "封書";
+"send.lock" = "施錠";
+"send.cancel" = "キャンセル";
+"send.send" = "送信";
+"send.attach_files" = "ファイルを添付";
+
+/* Receive Window */
+"receive.from" = "%@ から";
+"receive.reply" = "返信";
+"receive.close" = "閉じる";
+"receive.send_reply" = "返信を送信";
+"receive.open_seal" = "開封する";
+"receive.sealed_message" = "このメッセージは封書です。";
+"receive.broadcast" = "一斉通報";
+"receive.auto_reply" = "自動応答（不在）";
+"receive.unverified" = "未確認";
+
+/* Absence */
+"absence.normal" = "通常（不在解除）";
+"absence.not_at_desk" = "席を外しています";
+"absence.in_meeting" = "会議中です";
+"absence.out_to_lunch" = "食事中です";
+"absence.away" = "外出中です";
+
+/* Settings */
+"settings.general" = "一般";
+"settings.network" = "ネットワーク";
+"settings.send" = "送信";
+"settings.receive" = "受信";
+"settings.absence" = "不在";
+"settings.refuse" = "拒否";
+"settings.log" = "ログ";
+"settings.user_name" = "ユーザー名";
+"settings.group_name" = "グループ名";
+"settings.password" = "パスワード";
+"settings.port" = "ポート";
+"settings.broadcast_addresses" = "ブロードキャストアドレス";
+
+/* History */
+"history.title" = "メッセージ履歴";
+"history.search" = "メッセージを検索...";
+"history.all" = "すべて";
+"history.sent" = "送信";
+"history.received" = "受信";
+"history.clear_dates" = "日付をクリア";
+"history.no_results" = "メッセージが見つかりません";
+
+/* Menu Bar */
+"menubar.unread" = "未読メッセージ %d 件";
+"menubar.users_online" = "オンラインユーザー %d 人";
+"menubar.absence_mode" = "不在モード";
+"menubar.quit" = "IPMsgX を終了";
+
+/* Commands */
+"command.new_message" = "新規メッセージ";
+"command.refresh_users" = "ユーザーリストを更新";
+
+/* File Transfer */
+"transfer.downloading" = "ダウンロード中";
+"transfer.cancel" = "キャンセル";
+"transfer.drop_files" = "ファイルをドロップまたはクリックして添付";
+"transfer.files_attached" = "添付ファイル %d 件";

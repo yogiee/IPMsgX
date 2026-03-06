@@ -1,0 +1,79 @@
+/* IPMsgX English Localizations */
+
+/* General */
+"app.name" = "IPMsgX";
+"online" = "Online";
+"offline" = "Offline";
+
+/* Main Window */
+"sidebar.title" = "Users";
+"sidebar.search" = "Search users";
+"sidebar.no_users" = "No Users Online";
+"sidebar.no_users.description" = "Users on the local network will appear here.";
+
+/* Send Window */
+"send.title" = "New Message";
+"send.search_users" = "Search users";
+"send.message_placeholder" = "Type your message...";
+"send.seal" = "Seal";
+"send.lock" = "Lock";
+"send.cancel" = "Cancel";
+"send.send" = "Send";
+"send.attach_files" = "Attach Files";
+
+/* Receive Window */
+"receive.from" = "From %@";
+"receive.reply" = "Reply";
+"receive.close" = "Close";
+"receive.send_reply" = "Send Reply";
+"receive.open_seal" = "Open Seal";
+"receive.sealed_message" = "This message is sealed.";
+"receive.broadcast" = "Broadcast";
+"receive.auto_reply" = "Auto-reply (Absence)";
+"receive.unverified" = "Unverified";
+
+/* Absence */
+"absence.normal" = "Normal (Not Absent)";
+"absence.not_at_desk" = "Not at desk";
+"absence.in_meeting" = "In a meeting";
+"absence.out_to_lunch" = "Out to lunch";
+"absence.away" = "Away";
+
+/* Settings */
+"settings.general" = "General";
+"settings.network" = "Network";
+"settings.send" = "Send";
+"settings.receive" = "Receive";
+"settings.absence" = "Absence";
+"settings.refuse" = "Refuse";
+"settings.log" = "Log";
+"settings.user_name" = "User Name";
+"settings.group_name" = "Group Name";
+"settings.password" = "Password";
+"settings.port" = "Port";
+"settings.broadcast_addresses" = "Broadcast Addresses";
+
+/* History */
+"history.title" = "Message History";
+"history.search" = "Search messages...";
+"history.all" = "All";
+"history.sent" = "Sent";
+"history.received" = "Received";
+"history.clear_dates" = "Clear Dates";
+"history.no_results" = "No Messages Found";
+
+/* Menu Bar */
+"menubar.unread" = "%d unread message(s)";
+"menubar.users_online" = "%d user(s) online";
+"menubar.absence_mode" = "Absence Mode";
+"menubar.quit" = "Quit IPMsgX";
+
+/* Commands */
+"command.new_message" = "New Message";
+"command.refresh_users" = "Refresh User List";
+
+/* File Transfer */
+"transfer.downloading" = "Downloading";
+"transfer.cancel" = "Cancel";
+"transfer.drop_files" = "Drop files here or click to attach";
+"transfer.files_attached" = "%d file(s) attached";
