@@ -24,6 +24,28 @@ struct IPMsgXApp: App {
     @State private var sendToUser: UserInfo?
     @State private var windowObserver = WindowObserver()
 
+    init() {
+        // Redirect stderr to a log file so NSLog output is visible even in release builds.
+        // NSLog writes to both the unified logging system (where strings become <private>)
+        // AND to raw stderr (fd=2). By dup2-ing stderr to a file before any logging fires,
+        // all [CRYPTO] and other NSLog messages land in ~/Library/Logs/IPMsgX/debug.log
+        // with full text, unaffected by the privacy system.
+        // Usage: tail -f ~/Library/Logs/IPMsgX/debug.log
+        let logsDir = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)
+            .first!.appendingPathComponent("Logs/IPMsgX")
+        try? FileManager.default.createDirectory(at: logsDir, withIntermediateDirectories: true)
+        let logFile = logsDir.appendingPathComponent("debug.log")
+        // Rotate: keep last session only (truncate on launch)
+        try? "=== IPMsgX session started: \(Date()) ===\n".write(to: logFile, atomically: true, encoding: .utf8)
+        if let cPath = logFile.path.cString(using: .utf8) {
+            let fd = open(cPath, O_WRONLY | O_APPEND, 0o644)
+            if fd >= 0 {
+                dup2(fd, STDERR_FILENO)
+                close(fd)
+            }
+        }
+    }
+
     var body: some Scene {
         // Main window (single instance — prevents duplicate windows)
         Window("IPMsgX", id: "main") {
