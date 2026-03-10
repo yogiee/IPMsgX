@@ -43,7 +43,8 @@ enum IPMsgPacketBuilder {
         command: UInt32,
         userName: String,
         groupName: String?,
-        absenceTitle: String?
+        absenceTitle: String?,
+        fingerprint: String? = nil
     ) -> Data {
         // Build the appendix: userName[absenceTitle]\0groupName\0\nUN:logOnUser\nHN:hostName\nNN:userName\nGN:groupName\n\0
         var appendixData = Data()
@@ -77,6 +78,9 @@ enum IPMsgPacketBuilder {
         utf8Section += "NN:\(nickName)\n"
         if let group = groupName, !group.isEmpty {
             utf8Section += "GN:\(group)\n"
+        }
+        if let fp = fingerprint {
+            utf8Section += "FP:\(fp)\n"
         }
         appendixData.append(Data(utf8Section.utf8))
         appendixData.append(0)

@@ -428,26 +428,42 @@ actor CryptoService {
         var sessionKey: Data?
         var encryptedData: Data?
 
+        NSLog("[CRYPTO] encryptMessage: recipientKeyBits=%d supportAES256=%d supportBlowfish=%d supportRSA2048=%d supportRSA1024=%d", recipientKey.keySizeInBits, capability.supportAES256 ? 1 : 0, capability.supportBlowfish128 ? 1 : 0, capability.supportRSA2048 ? 1 : 0, capability.supportRSA1024 ? 1 : 0)
+
         if capability.supportAES256 {
             sessionKey = randomData(byteCount: 32) // 256 bits
             guard let sk = sessionKey else { return nil }
             encryptedData = SymmetricCrypto.encrypt(data: srcData, key: sk, iv: ivData, algorithm: .aes256)
-            guard encryptedData != nil else { return nil }
+            guard encryptedData != nil else {
+                NSLog("[CRYPTO] encryptMessage: AES-256 encryption FAILED")
+                return nil
+            }
             spec |= IPMsgEncFlag.aes256.rawValue
+            NSLog("[CRYPTO] encryptMessage: body encrypted with AES-256 (srcData=%d bytes → encData=%d bytes)", srcData.count, encryptedData!.count)
         } else if capability.supportBlowfish128 {
             sessionKey = randomData(byteCount: 16) // 128 bits
             guard let sk = sessionKey else { return nil }
             encryptedData = SymmetricCrypto.encrypt(data: srcData, key: sk, iv: ivData, algorithm: .blowfish128)
-            guard encryptedData != nil else { return nil }
+            guard encryptedData != nil else {
+                NSLog("[CRYPTO] encryptMessage: Blowfish-128 encryption FAILED")
+                return nil
+            }
             spec |= IPMsgEncFlag.blowfish128.rawValue
+            NSLog("[CRYPTO] encryptMessage: body encrypted with Blowfish-128 (srcData=%d bytes → encData=%d bytes)", srcData.count, encryptedData!.count)
         }
 
-        guard let sessionKey, let encryptedData else { return nil }
-
-        // Encrypt session key with RSA
-        guard let encryptedKey = encryptRSA(data: sessionKey, recipientKey: recipientKey) else {
+        guard let sessionKey, let encryptedData else {
+            NSLog("[CRYPTO] encryptMessage: no symmetric algorithm matched — cannot encrypt")
             return nil
         }
+
+        // Encrypt session key with RSA
+        NSLog("[CRYPTO] encryptMessage: encrypting %d-byte session key with recipient RSA%d key (mod=%d bytes)", sessionKey.count, recipientKey.keySizeInBits, recipientKey.modulus.count)
+        guard let encryptedKey = encryptRSA(data: sessionKey, recipientKey: recipientKey) else {
+            NSLog("[CRYPTO] encryptMessage: RSA session key encryption FAILED")
+            return nil
+        }
+        NSLog("[CRYPTO] encryptMessage: session key RSA-encrypted OK (%d bytes)", encryptedKey.count)
 
         if recipientKey.keySizeInBits == 2048 {
             spec |= IPMsgEncFlag.rsa2048.rawValue
@@ -543,12 +559,20 @@ actor CryptoService {
             if let sk = sessionKey, expectedSessionKeySize > 0, sk.count != expectedSessionKeySize {
                 NSLog("[CRYPTO] Decrypt: RSA%d produced %d-byte session key, expected %d — wrong key! Trying RSA%d fallback...", primaryKeySize, sk.count, expectedSessionKeySize, fallbackKeySize)
                 sessionKey = nil // discard garbage
-                sessionKey = decryptRSA(data: encKey, keyBitSize: fallbackKeySize)
-                if let sk2 = sessionKey, sk2.count != expectedSessionKeySize {
-                    NSLog("[CRYPTO] Decrypt: RSA%d fallback also produced %d-byte session key, expected %d — both keys wrong!", fallbackKeySize, sk2.count, expectedSessionKeySize)
-                    sessionKey = nil
-                } else if sessionKey != nil {
-                    NSLog("[CRYPTO] Decrypt: RSA%d fallback succeeded! Session key is %d bytes", fallbackKeySize, sessionKey!.count)
+                // RSA key size constrains ciphertext size: RSA1024 → 128 bytes, RSA2048 → 256 bytes.
+                // Only attempt fallback if the ciphertext is the right size for the fallback key.
+                let fallbackCompatible = (fallbackKeySize == 1024 && encKey.count == 128) ||
+                                         (fallbackKeySize == 2048 && encKey.count == 256)
+                if fallbackCompatible {
+                    sessionKey = decryptRSA(data: encKey, keyBitSize: fallbackKeySize)
+                    if let sk2 = sessionKey, sk2.count != expectedSessionKeySize {
+                        NSLog("[CRYPTO] Decrypt: RSA%d fallback also produced %d-byte session key, expected %d — both keys wrong!", fallbackKeySize, sk2.count, expectedSessionKeySize)
+                        sessionKey = nil
+                    } else if sessionKey != nil {
+                        NSLog("[CRYPTO] Decrypt: RSA%d fallback succeeded! Session key is %d bytes", fallbackKeySize, sessionKey!.count)
+                    }
+                } else {
+                    NSLog("[CRYPTO] Decrypt: RSA%d fallback skipped — encKey is %d bytes, incompatible with RSA%d (needs %d bytes)", fallbackKeySize, encKey.count, fallbackKeySize, fallbackKeySize == 1024 ? 128 : 256)
                 }
             }
         }

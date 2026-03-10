@@ -30,6 +30,7 @@ actor MessageService {
     private let selfHostName: String
 
     private var selfSpec: UInt32
+    private var selfFingerprint: String?
 
     private let selfVersion: String
 
@@ -79,8 +80,21 @@ actor MessageService {
             await crypto.startup()
             self.cryptoService = crypto
 
-            // Update self spec with encryption support
-            if await crypto.selfCapability.supportEncryption {
+            // Compute our RSA2048 fingerprint for the FP: field in BR_ENTRY.
+            // Windows IPMSG compares this against its cached fingerprint and sends
+            // GETPUBKEY if the fingerprint changed — this is the protocol mechanism
+            // for Windows to detect that our public key changed after a restart.
+            if let pub2048 = await crypto.publicKey2048,
+               let fpData = await crypto.calculateFingerPrint(modulus: pub2048.modulus) {
+                selfFingerprint = fpData.map { String(format: "%02X", $0) }.joined()
+                NSLog("[CRYPTO] Self RSA2048 fingerprint: %@", selfFingerprint!)
+            } else {
+                NSLog("[CRYPTO] Warning: could not compute RSA2048 fingerprint — FP: field will be omitted from BR_ENTRY")
+            }
+
+            // Update self spec with encryption support (only if enabled in settings)
+            let cryptoSupportsEncrypt = await crypto.selfCapability.supportEncryption
+            if settings.encryptionEnabled && cryptoSupportsEncrypt {
                 selfSpec |= IPMsgOption.encryptOpt.rawValue
             }
 
@@ -294,7 +308,11 @@ actor MessageService {
         // Request public key if encryption supported
         if fromUser.supportsEncrypt, let crypto = cryptoService {
             let cap = await crypto.selfCapability
+            let hasKey = fromUser.publicKey != nil
+            NSLog("[CRYPTO] handleEntry: %@ supportsEncrypt=1 existingKey=%d — sending GETPUBKEY", fromUser.displayName, hasKey ? 1 : 0)
             await sendGetPubKey(to: fromUser, capability: cap.encode())
+        } else {
+            NSLog("[CRYPTO] handleEntry: %@ supportsEncrypt=%d — no key exchange needed", fromUser.displayName, fromUser.supportsEncrypt ? 1 : 0)
         }
     }
 
@@ -352,14 +370,33 @@ actor MessageService {
                     let pubKeyInfo = fromUser.publicKey.map { "exp=0x\(String(format: "%X", $0.exponent)) mod=\($0.modulus.count)bytes keySizeInBits=\($0.keySizeInBits)" } ?? "nil"
                     NSLog("[CRYPTO] Decryption FAILED for packet from %@ (pkt=%d). senderPubKey=%@ appendixLen=%d. See CryptoService logs above for details.", fromUser.displayName, packet.packetNo, pubKeyInfo, packet.appendix.count)
 
-                    // Auto-recovery: request fresh public key from sender and re-broadcast
-                    // our own entry so both sides re-exchange keys
-                    if let crypto = cryptoService {
-                        let cap = await crypto.selfCapability
-                        await sendGetPubKey(to: fromUser, capability: cap.encode())
-                    }
-                    await broadcastEntryTo(ipAddress: ipAddress)
-                    NSLog("[CRYPTO] Triggered key re-exchange with %@ after decryption failure", fromUser.displayName)
+                    // Auto-recovery after decryption failure.
+                    // Windows IPMSG caches our public key per-user and will NOT re-request it
+                    // when it receives an ordinary BR_ENTRY (it already has a cached key).
+                    // Unsolicited ANSPUBKEY pushes are also ignored.
+                    // The ONLY reliable way to force a GETPUBKEY is: send BR_EXIT (which makes
+                    // Windows remove us from its user list) then BR_ENTRY (which makes Windows
+                    // treat us as a new user and send GETPUBKEY). We respond with our current
+                    // RSA2048 key → Windows updates its cache → next message decrypts correctly.
+                    NSLog("[CRYPTO] Decryption failure recovery: sending BR_EXIT+BR_ENTRY to %@ to force GETPUBKEY", fromUser.displayName)
+                    await sendExitThenEntry(to: fromUser.ipAddress, port: fromUser.port)
+
+                    // Notify the sender in plaintext so they know their cached key is stale.
+                    // This shows up as a received message on their end and prompts them to restart.
+                    let noticeText = "[IPMsgX] Decryption failed — your cached public key for this Mac is stale. Please restart IPMsg to re-exchange encryption keys."
+                    let noticePktNo = await PacketNumberGenerator.shared.next()
+                    let noticeCmd: UInt32 = IPMsgCommand.sendMsg.rawValue
+                    let noticeData = IPMsgPacketBuilder.buildSendMsg(
+                        packetNo: noticePktNo,
+                        logOnUser: selfLogOnName,
+                        hostName: selfHostName,
+                        command: noticeCmd,
+                        message: noticeText,
+                        optionData: nil,
+                        useUTF8: fromUser.supportsUTF8
+                    )
+                    try? await transport.send(data: noticeData, to: fromUser.ipAddress, port: fromUser.port)
+                    NSLog("[CRYPTO] Sent plaintext key-stale notification to %@", fromUser.displayName)
                 }
             } else {
                 messageText = "[Encrypted message — encryption service not available.]"
@@ -402,34 +439,44 @@ actor MessageService {
     // MARK: - Crypto Handling
 
     private func handleGetPubKey(packet: IPMsgPacket, fromUser: UserInfo) async {
+        // Parse requester's capability as hex (correct behavior).
+        // The original Mac client had a bug here: it used [appendix integerValue] (decimal)
+        // on a hex string, always yielding 0 and thus always returning RSA1024. We now
+        // correctly parse as hex and respond with RSA2048 when the requester supports it.
+        let requesterCapa = UInt32(packet.appendix, radix: 16) ?? 0
+        await sendOurPubKey(to: fromUser, requesterCapa: requesterCapa, context: "handleGetPubKey")
+    }
+
+    /// Send our RSA public key to `user`. Call in response to GETPUBKEY or proactively after
+    /// decryption failure to force the Windows client to update its cached key.
+    private func sendOurPubKey(to user: UserInfo, requesterCapa: UInt32, context: String) async {
         guard let crypto = cryptoService else { return }
         let selfCap = await crypto.selfCapability
         guard selfCap.supportEncryption else { return }
 
-        // NOTE: The original Mac client (MessageCenter.m:2117) uses [appendix integerValue]
-        // (decimal parsing) on a hex-formatted capability string. This ALWAYS returns 0 for
-        // hex strings starting with a letter (e.g. "E0000E"), causing the original to ALWAYS
-        // default to RSA1024. We match this behavior for Windows compatibility — Windows clients
-        // have only ever been tested with RSA1024 responses from Mac.
+        let requesterWantsRSA2048 = (requesterCapa & IPMsgEncFlag.rsa2048.rawValue) != 0
         let key: (exponent: UInt32, modulus: Data)?
         let keySize: String
-        if let k = await crypto.publicKey1024 {
+        if requesterWantsRSA2048, let k = await crypto.publicKey2048 {
+            key = k
+            keySize = "RSA2048"
+        } else if let k = await crypto.publicKey1024 {
             key = k
             keySize = "RSA1024"
         } else {
             key = await crypto.publicKey2048
-            keySize = "RSA2048"
+            keySize = "RSA2048 (fallback)"
         }
 
         let selfCapa = selfCap.encode()
 
         guard let key else {
-            NSLog("[CRYPTO] handleGetPubKey: no %@ key available", keySize)
+            NSLog("[CRYPTO] %@: no %@ key available — cannot send pubkey", context, keySize)
             return
         }
 
         let modulusHex = key.modulus.hexEncodedString
-        NSLog("[CRYPTO] handleGetPubKey: sending %@ to %@ — selfCapa=0x%X modBytes=%d modHexLen=%d exp=0x%X", keySize, fromUser.displayName, selfCapa, key.modulus.count, modulusHex.count, key.exponent)
+        NSLog("[CRYPTO] %@: sending %@ to %@ — requesterCapa=0x%X wantsRSA2048=%d selfCapa=0x%X modBytes=%d exp=0x%X", context, keySize, user.displayName, requesterCapa, requesterWantsRSA2048 ? 1 : 0, selfCapa, key.modulus.count, key.exponent)
 
         let packetNo = await PacketNumberGenerator.shared.next()
         let data = IPMsgPacketBuilder.buildPubKeyResponse(
@@ -440,7 +487,7 @@ actor MessageService {
             exponent: key.exponent,
             modulusHex: modulusHex
         )
-        try? await transport.send(data: data, to: fromUser.ipAddress, port: fromUser.port)
+        try? await transport.send(data: data, to: user.ipAddress, port: user.port)
     }
 
     private func handleAnsPubKey(packet: IPMsgPacket, fromUser: UserInfo) async {
@@ -516,7 +563,8 @@ actor MessageService {
             command: IPMsgCommand.brEntry.rawValue | selfSpec,
             userName: userName,
             groupName: settings.groupName.isEmpty ? nil : settings.groupName,
-            absenceTitle: absenceTitle
+            absenceTitle: absenceTitle,
+            fingerprint: selfFingerprint
         )
 
         let discoveredAddrs = BroadcastAddressResolver.allBroadcastAddresses
@@ -552,7 +600,8 @@ actor MessageService {
             command: IPMsgCommand.brAbsence.rawValue | selfSpec,
             userName: userName,
             groupName: settings.groupName.isEmpty ? nil : settings.groupName,
-            absenceTitle: absenceTitle
+            absenceTitle: absenceTitle,
+            fingerprint: selfFingerprint
         )
 
         let addresses = BroadcastAddressResolver.allBroadcastAddresses + settings.broadcastAddresses
@@ -576,6 +625,45 @@ actor MessageService {
         await transport.broadcast(data: data, toAddresses: addresses)
     }
 
+    /// Send BR_EXIT then BR_ENTRY to a specific host, forcing it to clear its user-list entry
+    /// for us and re-discover us as a new user. This is the only reliable way to make a Windows
+    /// IPMSG client send GETPUBKEY for us again when it has a stale cached public key.
+    private func sendExitThenEntry(to ipAddress: String, port: UInt16) async {
+        let userName = settings.userName.isEmpty ? selfLogOnName : settings.userName
+
+        // BR_EXIT — Windows removes us from its user list
+        let exitPktNo = await PacketNumberGenerator.shared.next()
+        let exitData = IPMsgPacketBuilder.buildEntry(
+            packetNo: exitPktNo,
+            logOnUser: selfLogOnName,
+            hostName: selfHostName,
+            command: IPMsgCommand.brExit.rawValue | selfSpec,
+            userName: userName,
+            groupName: settings.groupName.isEmpty ? nil : settings.groupName,
+            absenceTitle: nil
+        )
+        try? await transport.send(data: exitData, to: ipAddress, port: port)
+        NSLog("[CRYPTO] sendExitThenEntry: sent BR_EXIT to %@:%d", ipAddress, port)
+
+        // Brief pause so EXIT is processed before ENTRY arrives
+        try? await Task.sleep(for: .milliseconds(200))
+
+        // BR_ENTRY — Windows sees us as new, sends GETPUBKEY
+        let entryPktNo = await PacketNumberGenerator.shared.next()
+        let entryData = IPMsgPacketBuilder.buildEntry(
+            packetNo: entryPktNo,
+            logOnUser: selfLogOnName,
+            hostName: selfHostName,
+            command: IPMsgCommand.brEntry.rawValue | selfSpec,
+            userName: userName,
+            groupName: settings.groupName.isEmpty ? nil : settings.groupName,
+            absenceTitle: nil,
+            fingerprint: selfFingerprint
+        )
+        try? await transport.send(data: entryData, to: ipAddress, port: port)
+        NSLog("[CRYPTO] sendExitThenEntry: sent BR_ENTRY to %@:%d — expecting GETPUBKEY in response", ipAddress, port)
+    }
+
     private func broadcastEntryTo(ipAddress: String) async {
         let packetNo = await PacketNumberGenerator.shared.next()
         let userName = settings.userName.isEmpty ? selfLogOnName : settings.userName
@@ -586,7 +674,8 @@ actor MessageService {
             command: IPMsgCommand.brEntry.rawValue | selfSpec,
             userName: userName,
             groupName: settings.groupName.isEmpty ? nil : settings.groupName,
-            absenceTitle: nil
+            absenceTitle: nil,
+            fingerprint: selfFingerprint
         )
         try? await transport.send(data: data, to: ipAddress)
     }
@@ -601,7 +690,8 @@ actor MessageService {
             command: IPMsgCommand.ansEntry.rawValue | selfSpec,
             userName: userName,
             groupName: settings.groupName.isEmpty ? nil : settings.groupName,
-            absenceTitle: settings.inAbsence ? settings.absenceTitle(at: settings.absenceIndex) : nil
+            absenceTitle: settings.inAbsence ? settings.absenceTitle(at: settings.absenceIndex) : nil,
+            fingerprint: selfFingerprint
         )
         try? await transport.send(data: data, to: ipAddress, port: port)
     }
@@ -703,10 +793,12 @@ actor MessageService {
     private func sendMessagePacket(to user: UserInfo, packetNo: Int, command: UInt32, message: String, option: String?) async -> Int {
         let useUTF8 = user.supportsUTF8
 
-        // Try encryption if supported
-        if user.supportsEncrypt, let pubKey = user.publicKey, let crypto = cryptoService {
+        // Try encryption if supported and enabled in settings
+        if settings.encryptionEnabled, user.supportsEncrypt, let pubKey = user.publicKey, let crypto = cryptoService {
             let cap = user.cryptoCapability ?? CryptoCapability()
             let matchedCap = (await crypto.selfCapability).matched(with: cap)
+
+            NSLog("[CRYPTO] sendMessagePacket → %@ supportsEncrypt=1 pubKeyBits=%d matchedCap=0x%X supportEncryption=%d", user.displayName, pubKey.keySizeInBits, matchedCap.encode(), matchedCap.supportEncryption ? 1 : 0)
 
             if matchedCap.supportEncryption {
                 let encResult = await crypto.encryptMessage(
@@ -724,7 +816,7 @@ actor MessageService {
                     if encResult.encExtMsg {
                         encCommand |= IPMsgOption.encExtMsgOpt.rawValue
                     }
-
+                    NSLog("[CRYPTO] sendMessagePacket → %@: encryption OK, sending encrypted packet (pkt=%d)", user.displayName, packetNo)
                     let data = IPMsgPacketBuilder.buildEncryptedMsg(
                         packetNo: packetNo,
                         logOnUser: selfLogOnName,
@@ -737,8 +829,14 @@ actor MessageService {
                     )
                     try? await transport.send(data: data, to: user.ipAddress, port: user.port)
                     return packetNo
+                } else {
+                    NSLog("[CRYPTO] sendMessagePacket → %@: encryptMessage FAILED — falling back to plain text!", user.displayName)
                 }
+            } else {
+                NSLog("[CRYPTO] sendMessagePacket → %@: matched capability does not support encryption — sending plain text", user.displayName)
             }
+        } else {
+            NSLog("[CRYPTO] sendMessagePacket → %@: supportsEncrypt=%d hasPublicKey=%d hasCrypto=%d — sending plain text", user.displayName, user.supportsEncrypt ? 1 : 0, user.publicKey != nil ? 1 : 0, cryptoService != nil ? 1 : 0)
         }
 
         // Plain text send
@@ -831,6 +929,7 @@ actor MessageService {
     }
 
     private func sendGetPubKey(to user: UserInfo, capability: UInt32) async {
+        NSLog("[CRYPTO] sendGetPubKey → %@ (%@) capability=0x%X", user.displayName, user.ipAddress, capability)
         let packetNo = await PacketNumberGenerator.shared.next()
         let data = IPMsgPacketBuilder.buildGetPubKey(
             packetNo: packetNo,

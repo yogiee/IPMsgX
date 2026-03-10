@@ -68,6 +68,11 @@ final class SettingsService: @unchecked Sendable {
         set { defaults.set(newValue, forKey: "dialup") }
     }
 
+    var encryptionEnabled: Bool {
+        get { defaults.object(forKey: "encryptionEnabled") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "encryptionEnabled") }
+    }
+
     var broadcastAddresses: [String] {
         get { (defaults.array(forKey: "broadcastAddresses") as? [String]) ?? [] }
         set { defaults.set(newValue, forKey: "broadcastAddresses") }
