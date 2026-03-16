@@ -87,10 +87,19 @@ struct ReceiveWindowContent: View {
                 // Message body (with seal overlay)
                 ZStack {
                     ScrollView {
-                        Text(viewModel.message.message)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding()
+                        Group {
+                            if let attributed = try? AttributedString(
+                                markdown: viewModel.message.message,
+                                options: .init(interpretedSyntax: .full)
+                            ) {
+                                Text(attributed)
+                            } else {
+                                Text(viewModel.message.message)
+                            }
+                        }
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
                     }
 
                     if !viewModel.isSealOpened {

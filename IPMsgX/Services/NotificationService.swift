@@ -76,6 +76,27 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         center.add(request)
     }
 
+    // MARK: - Notification Removal
+
+    func removeNotification(for packetNo: Int) {
+        center?.removeDeliveredNotifications(withIdentifiers: ["msg-\(packetNo)"])
+    }
+
+    func removeNotifications(for packetNos: [Int]) {
+        guard !packetNos.isEmpty else { return }
+        center?.removeDeliveredNotifications(withIdentifiers: packetNos.map { "msg-\($0)" })
+    }
+
+    func removeAllMessageNotifications() {
+        guard let center else { return }
+        center.getDeliveredNotifications { notifications in
+            let ids = notifications
+                .filter { $0.request.identifier.hasPrefix("msg-") }
+                .map { $0.request.identifier }
+            center.removeDeliveredNotifications(withIdentifiers: ids)
+        }
+    }
+
     // MARK: - UNUserNotificationCenterDelegate
 
     nonisolated func userNotificationCenter(
