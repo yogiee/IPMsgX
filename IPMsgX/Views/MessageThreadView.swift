@@ -13,7 +13,9 @@ struct MessageThreadView: View {
     let userID: UserIdentifier
     @Environment(AppState.self) private var appState
     @State private var replyText = ""
-    @State private var showReplyField = false
+    @State private var emojiPickerShown = false
+    @State private var emojiTargetTextView: NSTextView? = nil
+    @AppStorage("cmdEnterToSend") private var cmdEnterToSend: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -39,28 +41,128 @@ struct MessageThreadView: View {
 
             Divider()
 
-            // Quick reply bar
-            HStack(spacing: 8) {
-                TextField("Reply...", text: $replyText, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .lineLimit(1...4)
-                    .padding(8)
-                    .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 8))
+            // Compose area
+            VStack(spacing: 0) {
+                // Formatting toolbar
+                HStack(spacing: 1) {
+                    ComposeToolbarButton(systemImage: "face.smiling") {
+                        emojiTargetTextView = NSApp.keyWindow?.firstResponder as? NSTextView
+                        emojiPickerShown = true
+                    }
+                    .help("Emoji picker")
+                    .popover(isPresented: $emojiPickerShown, arrowEdge: .bottom) {
+                        EmojiPickerView { emoji in
+                            if let tv = emojiTargetTextView {
+                                tv.insertText(emoji, replacementRange: tv.selectedRange())
+                            } else {
+                                replyText += emoji
+                            }
+                            emojiPickerShown = false
+                        }
+                    }
 
-                Button {
-                    sendReply()
-                } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(replyText.isEmpty ? Color.secondary : Color.blue)
+                    Divider().frame(height: 16).padding(.horizontal, 3)
+
+                    ComposeToolbarButton(systemImage: "bold") {
+                        insertMarkdown("**", "**")
+                    }
+                    .help("Bold — wraps selection with **bold**")
+
+                    ComposeToolbarButton(systemImage: "italic") {
+                        insertMarkdown("*", "*")
+                    }
+                    .help("Italic — wraps selection with *italic*")
+
+                    ComposeToolbarButton(systemImage: "strikethrough") {
+                        insertMarkdown("~~", "~~")
+                    }
+                    .help("Strikethrough — wraps selection with ~~strikethrough~~\n(Underline is not supported by Markdown)")
+
+                    ComposeToolbarButton(systemImage: "chevron.left.forwardslash.chevron.right") {
+                        insertMarkdown("`", "`")
+                    }
+                    .help("Inline code — wraps selection with `code`")
+
+                    ComposeToolbarButton(systemImage: "curlybraces") {
+                        insertMarkdown("```\n", "\n```")
+                    }
+                    .help("Code block — wraps selection with ```code block```")
+
+                    Spacer()
+
+                    Toggle("⌘Return to send", isOn: $cmdEnterToSend)
+                        .toggleStyle(.checkbox)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .help(cmdEnterToSend
+                            ? "⌘Return sends the message. Plain Return inserts a newline."
+                            : "Return sends the message. Enable to require ⌘Return instead.")
                 }
-                .buttonStyle(.plain)
-                .disabled(replyText.isEmpty)
-                .keyboardShortcut(.return, modifiers: .command)
+                .padding(.horizontal, 10)
+                .padding(.top, 6)
+                .padding(.bottom, 2)
+
+                // Text input + send button
+                HStack(spacing: 8) {
+                    TextField("Reply…", text: $replyText, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .lineLimit(1...5)
+                        .padding(8)
+                        .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 8))
+                        .onKeyPress(keys: [.return]) { press in
+                            let plainReturn = press.modifiers.isEmpty
+                            let cmdReturn = press.modifiers.contains(.command)
+                            // send on plain Return (default) or ⌘Return (when cmdEnterToSend is on)
+                            if (!cmdEnterToSend && plainReturn) || cmdReturn {
+                                if !replyText.isEmpty { sendReply() }
+                                return .handled
+                            }
+                            return .ignored
+                        }
+
+                    Button {
+                        sendReply()
+                    } label: {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(replyText.isEmpty ? Color.secondary : Color.blue)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(replyText.isEmpty)
+                }
+                .padding(.horizontal, 10)
+                .padding(.bottom, 10)
+                .padding(.top, 4)
             }
-            .padding(10)
         }
         .navigationTitle(peerDisplayName)
+        .onAppear { appState.markThreadRead(userID: userID) }
+        .onChange(of: userID) { appState.markThreadRead(userID: userID) }
+    }
+
+    // MARK: - Helpers
+
+    private func sendReply() {
+        guard !replyText.isEmpty else { return }
+        let text = replyText
+        replyText = ""
+        Task {
+            if let user = appState.onlineUsers.first(where: { $0.id == userID }) {
+                _ = await appState.sendMessage(
+                    to: [user],
+                    message: text,
+                    isSealed: SettingsService.shared.sealCheckDefault,
+                    isLocked: false
+                )
+            }
+        }
+    }
+
+    private func insertMarkdown(_ prefix: String, _ suffix: String) {
+        guard let textView = NSApp.keyWindow?.firstResponder as? NSTextView else { return }
+        let range = textView.selectedRange()
+        let selected = (textView.string as NSString).substring(with: range)
+        textView.insertText("\(prefix)\(selected)\(suffix)", replacementRange: range)
     }
 
     // MARK: - Thread Messages
@@ -69,7 +171,6 @@ struct MessageThreadView: View {
         if let user = appState.onlineUsers.first(where: { $0.id == userID }) {
             return user.displayName
         }
-        // Fall back to received messages
         if let msg = appState.receivedMessages.first(where: { $0.fromUser.id == userID }) {
             return msg.fromUser.displayName
         }
@@ -79,7 +180,6 @@ struct MessageThreadView: View {
     private var threadMessages: [ThreadItem] {
         var items: [ThreadItem] = []
 
-        // Received from this user
         for msg in appState.receivedMessages where msg.fromUser.id == userID {
             items.append(ThreadItem(
                 id: "recv-\(msg.packetNo)",
@@ -95,7 +195,6 @@ struct MessageThreadView: View {
             ))
         }
 
-        // Sent to this user
         for msg in appState.sentMessages {
             if msg.toUsers.contains(where: { $0.id == userID }) {
                 items.append(ThreadItem(
@@ -117,22 +216,6 @@ struct MessageThreadView: View {
 
         return items.sorted { $0.date < $1.date }
     }
-
-    private func sendReply() {
-        guard !replyText.isEmpty else { return }
-        let text = replyText
-        replyText = ""
-        Task {
-            if let user = appState.onlineUsers.first(where: { $0.id == userID }) {
-                _ = await appState.sendMessage(
-                    to: [user],
-                    message: text,
-                    isSealed: SettingsService.shared.sealCheckDefault,
-                    isLocked: false
-                )
-            }
-        }
-    }
 }
 
 // MARK: - Thread Item
@@ -147,7 +230,7 @@ struct ThreadItem: Identifiable {
     let secureLevel: Int
     let hasAttachments: Bool
     let attachmentCount: Int
-    let packetNo: Int?  // Set for received messages, enables reopening
+    let packetNo: Int?
     var isSealOpenedByRecipient: Bool = false
     var attachmentURLs: [URL] = []
 }
@@ -163,7 +246,7 @@ private struct ChatBubbleView: View {
             if item.direction == .sent { Spacer(minLength: 60) }
 
             VStack(alignment: item.direction == .sent ? .trailing : .leading, spacing: 2) {
-                Text(item.message)
+                renderedMessage
                     .textSelection(.enabled)
                     .padding(10)
                     .background(
@@ -236,6 +319,18 @@ private struct ChatBubbleView: View {
             }
 
             if item.direction == .received { Spacer(minLength: 60) }
+        }
+    }
+
+    @ViewBuilder
+    private var renderedMessage: some View {
+        if let attributed = try? AttributedString(
+            markdown: item.message,
+            options: .init(interpretedSyntax: .full)
+        ) {
+            Text(attributed)
+        } else {
+            Text(item.message)
         }
     }
 }

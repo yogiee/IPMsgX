@@ -53,3 +53,11 @@ extension Notification.Name {
     static let openSendWindowToUser = Notification.Name("com.ipmsgx.openSendWindowToUser")
     static let badgeCountChanged = Notification.Name("com.ipmsgx.badgeCountChanged")
 }
+
+/// Wrapper used as the `.sheet(item:)` identity for the send window.
+/// Using `item:` instead of `isPresented:` ensures the preselectedUser
+/// is available the instant SwiftUI evaluates the sheet content.
+struct SendRequest: Identifiable {
+    let id = UUID()
+    let preselectedUser: UserInfo?
+}

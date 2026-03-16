@@ -19,9 +19,9 @@ extension Bundle {
 @main
 struct IPMsgXApp: App {
     @State private var appState = AppState()
-    @State private var showSendWindow = false
+    @State private var sendRequest: SendRequest?
     @State private var currentReceiveMessage: ReceivedMessage?
-    @State private var sendToUser: UserInfo?
+    @State private var lastReceivePacketNo: Int?
     @State private var windowObserver = WindowObserver()
 
     init() {
@@ -60,19 +60,15 @@ struct IPMsgXApp: App {
                     ClipboardImageManager.cleanupOldFiles()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .openNewSendWindow)) { _ in
-                    sendToUser = nil
-                    showSendWindow = true
+                    sendRequest = SendRequest(preselectedUser: nil)
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .openSendWindowToUser)) { notification in
                     if let user = notification.userInfo?["user"] as? UserInfo {
-                        sendToUser = user
-                        showSendWindow = true
+                        sendRequest = SendRequest(preselectedUser: user)
                     }
                 }
-                .sheet(isPresented: $showSendWindow, onDismiss: {
-                    sendToUser = nil
-                }) {
-                    SendWindow(preselectedUser: sendToUser)
+                .sheet(item: $sendRequest) { request in
+                    SendWindow(preselectedUser: request.preselectedUser)
                         .environment(appState)
                         .frame(minWidth: 500, minHeight: 450)
                 }
@@ -86,8 +82,15 @@ struct IPMsgXApp: App {
                         currentReceiveMessage = msg
                     }
                 }
+                .onChange(of: currentReceiveMessage?.packetNo) { _, newPacketNo in
+                    if let pn = newPacketNo {
+                        lastReceivePacketNo = pn
+                    }
+                }
                 .sheet(item: $currentReceiveMessage, onDismiss: {
-                    appState.markMessageRead()
+                    if let pn = lastReceivePacketNo {
+                        appState.markRead(packetNo: pn)
+                    }
                     // Show next queued message if any
                     DispatchQueue.main.async {
                         if let next = appState.popPendingReceive() {

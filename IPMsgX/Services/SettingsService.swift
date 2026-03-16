@@ -73,6 +73,13 @@ final class SettingsService: @unchecked Sendable {
         set { defaults.set(newValue, forKey: "encryptionEnabled") }
     }
 
+    /// When true, ⌘Return is required to send; plain Return inserts a newline.
+    /// When false (default), plain Return sends immediately.
+    var cmdEnterToSend: Bool {
+        get { defaults.object(forKey: "cmdEnterToSend") as? Bool ?? false }
+        set { defaults.set(newValue, forKey: "cmdEnterToSend") }
+    }
+
     var broadcastAddresses: [String] {
         get { (defaults.array(forKey: "broadcastAddresses") as? [String]) ?? [] }
         set { defaults.set(newValue, forKey: "broadcastAddresses") }

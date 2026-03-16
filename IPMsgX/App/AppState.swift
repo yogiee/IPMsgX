@@ -10,8 +10,15 @@ private let logger = Logger(subsystem: "com.ipmsgx", category: "AppState")
 @MainActor
 final class AppState {
     var isAbsent: Bool = false
-    var unreadCount: Int = 0
     var networkConnected: Bool = false
+
+    /// Packet numbers of messages the user has actually read (thread view or receive window).
+    private var readPacketNos: Set<Int> = []
+
+    /// Computed so it always reflects actual read state — no drift possible.
+    var unreadCount: Int {
+        receivedMessages.filter { !$0.isAbsenceReply && !readPacketNos.contains($0.packetNo) }.count
+    }
 
     var onlineUsers: [UserInfo] = []
     var receivedMessages: [ReceivedMessage] = []
@@ -105,7 +112,6 @@ final class AppState {
                 switch event {
                 case .messageReceived(let msg):
                     self.receivedMessages.insert(msg, at: 0)
-                    self.unreadCount += 1
                     self.postBadgeUpdate()
                     PersistenceController.saveReceivedMessage(msg)
                     if !msg.isAbsenceReply {
@@ -194,16 +200,30 @@ final class AppState {
         return packetNo
     }
 
-    func markMessageRead() {
-        if unreadCount > 0 {
-            unreadCount -= 1
-        }
+    /// Mark a single message as read (called when its receive window is dismissed).
+    func markRead(packetNo: Int) {
+        readPacketNos.insert(packetNo)
         postBadgeUpdate()
+        NotificationService.shared.removeNotification(for: packetNo)
+    }
+
+    /// Mark all messages from a user as read (called when their thread is viewed).
+    func markThreadRead(userID: UserIdentifier) {
+        let packetNos = receivedMessages
+            .filter { $0.fromUser.id == userID && !$0.isAbsenceReply }
+            .map { $0.packetNo }
+        guard !packetNos.isEmpty else { return }
+        for pn in packetNos { readPacketNos.insert(pn) }
+        postBadgeUpdate()
+        NotificationService.shared.removeNotifications(for: packetNos)
     }
 
     func markAllRead() {
-        unreadCount = 0
+        for msg in receivedMessages where !msg.isAbsenceReply {
+            readPacketNos.insert(msg.packetNo)
+        }
         postBadgeUpdate()
+        NotificationService.shared.removeAllMessageNotifications()
     }
 
     /// Queue a specific message for display in the receive window
@@ -216,10 +236,13 @@ final class AppState {
         }
     }
 
-    /// Queue all unread messages for sequential display
+    /// Queue all unread messages for sequential display, and clear their notification banners.
     func queueAllUnreadForDisplay() {
-        let unread = receivedMessages.prefix(unreadCount).filter { !displayedPacketNos.contains($0.packetNo) }
+        let unread = receivedMessages.filter {
+            !$0.isAbsenceReply && !readPacketNos.contains($0.packetNo) && !displayedPacketNos.contains($0.packetNo)
+        }
         guard !unread.isEmpty else { return }
+        NotificationService.shared.removeNotifications(for: unread.map { $0.packetNo })
         for msg in unread {
             displayedPacketNos.insert(msg.packetNo)
         }
