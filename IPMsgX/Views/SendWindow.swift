@@ -43,7 +43,7 @@ struct SendWindowContent: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("cmdEnterToSend") private var cmdEnterToSend: Bool = false
     @State private var emojiPickerShown = false
-    @State private var emojiTargetTextView: NSTextView? = nil
+    @State private var isTextAreaDropTargeted = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -79,17 +79,12 @@ struct SendWindowContent: View {
                 // Formatting toolbar
                 HStack(spacing: 1) {
                     ComposeToolbarButton(systemImage: "face.smiling") {
-                        emojiTargetTextView = NSApp.keyWindow?.firstResponder as? NSTextView
                         emojiPickerShown = true
                     }
                     .help("Emoji picker")
                     .popover(isPresented: $emojiPickerShown, arrowEdge: .bottom) {
                         EmojiPickerView { emoji in
-                            if let tv = emojiTargetTextView {
-                                tv.insertText(emoji, replacementRange: tv.selectedRange())
-                            } else {
-                                viewModel.messageText += emoji
-                            }
+                            viewModel.messageText += emoji
                             emojiPickerShown = false
                         }
                     }
@@ -132,26 +127,36 @@ struct SendWindowContent: View {
                             : "Return sends the message. Enable to require ⌘Return instead.")
                 }
 
-                TextEditor(text: $viewModel.messageText)
-                    .font(.body)
-                    .frame(minHeight: 100)
-                    .scrollContentBackground(.hidden)
-                    .padding(4)
-                    .background(.background.secondary, in: RoundedRectangle(cornerRadius: 8))
-                    .onKeyPress(keys: [.return]) { press in
-                        let plainReturn = press.modifiers.isEmpty
-                        let cmdReturn = press.modifiers.contains(.command)
-                        if (!cmdEnterToSend && plainReturn) || cmdReturn {
-                            if viewModel.canSend {
-                                Task {
-                                    await viewModel.send()
-                                    dismiss()
-                                }
-                            }
-                            return .handled
+                AttachmentTextEditor(
+                    text: $viewModel.messageText,
+                    cmdEnterToSend: cmdEnterToSend,
+                    onEnterSend: {
+                        if viewModel.canSend {
+                            Task { await viewModel.send(); dismiss() }
                         }
-                        return .ignored
+                    },
+                    onFileDrop: { urls in
+                        for url in urls { viewModel.addAttachment(url: url) }
+                    },
+                    isDropTargeted: $isTextAreaDropTargeted
+                )
+                .frame(minHeight: 100)
+                .background(.background.secondary, in: RoundedRectangle(cornerRadius: 8))
+                .overlay {
+                    if isTextAreaDropTargeted {
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.accentColor, lineWidth: 2)
+                            .background(
+                                Color.accentColor.opacity(0.08),
+                                in: RoundedRectangle(cornerRadius: 8)
+                            )
+                            .overlay {
+                                Label("Drop to attach", systemImage: "paperclip")
+                                    .font(.callout.weight(.medium))
+                                    .foregroundStyle(Color.accentColor)
+                            }
                     }
+                }
 
                 // Attachments
                 if !viewModel.attachmentURLs.isEmpty {
