@@ -42,7 +42,6 @@ struct SendWindowContent: View {
     @Bindable var viewModel: SendViewModel
     @Environment(\.dismiss) private var dismiss
     @AppStorage("cmdEnterToSend") private var cmdEnterToSend: Bool = false
-    @State private var emojiPickerShown = false
     @State private var isTextAreaDropTargeted = false
 
     var body: some View {
@@ -78,19 +77,6 @@ struct SendWindowContent: View {
             VStack(spacing: 8) {
                 // Formatting toolbar
                 HStack(spacing: 1) {
-                    ComposeToolbarButton(systemImage: "face.smiling") {
-                        emojiPickerShown = true
-                    }
-                    .help("Emoji picker")
-                    .popover(isPresented: $emojiPickerShown, arrowEdge: .bottom) {
-                        EmojiPickerView { emoji in
-                            viewModel.messageText += emoji
-                            emojiPickerShown = false
-                        }
-                    }
-
-                    Divider().frame(height: 16).padding(.horizontal, 3)
-
                     ComposeToolbarButton(systemImage: "bold") {
                         insertMarkdownAroundSelection("**", "**")
                     }

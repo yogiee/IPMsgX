@@ -13,7 +13,6 @@ struct MessageThreadView: View {
     let userID: UserIdentifier
     @Environment(AppState.self) private var appState
     @State private var replyText = ""
-    @State private var emojiPickerShown = false
     @AppStorage("cmdEnterToSend") private var cmdEnterToSend: Bool = false
 
     var body: some View {
@@ -44,19 +43,6 @@ struct MessageThreadView: View {
             VStack(spacing: 0) {
                 // Formatting toolbar
                 HStack(spacing: 1) {
-                    ComposeToolbarButton(systemImage: "face.smiling") {
-                        emojiPickerShown = true
-                    }
-                    .help("Emoji picker")
-                    .popover(isPresented: $emojiPickerShown, arrowEdge: .bottom) {
-                        EmojiPickerView { emoji in
-                            replyText += emoji
-                            emojiPickerShown = false
-                        }
-                    }
-
-                    Divider().frame(height: 16).padding(.horizontal, 3)
-
                     ComposeToolbarButton(systemImage: "bold") {
                         insertMarkdown("**", "**")
                     }
