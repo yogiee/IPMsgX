@@ -27,16 +27,26 @@ enum MessageRenderer {
     // MARK: - Render
 
     /// Produce a SwiftUI-renderable AttributedString from raw message text.
-    /// Uses `.inlineOnlyPreservingWhitespace` so emoji and other non-ASCII
-    /// characters pass through the markdown parser without being mangled by
-    /// block-level paragraph processing (which caused blank rendering in .full).
+    ///
+    /// The markdown pipeline is only engaged when the text actually contains
+    /// markdown syntax characters or a URL. Skipping it for plain text and
+    /// emoji avoids a Foundation bug where `AttributedString(markdown:)` can
+    /// produce zero-height / invisible runs for certain Unicode/emoji sequences,
+    /// even with `.inlineOnlyPreservingWhitespace`.
     static func render(_ raw: String) -> AttributedString {
         let text = sanitize(raw)
         guard !text.isEmpty else { return AttributedString("") }
 
-        // Pre-process: wrap bare URLs in markdown link syntax so
-        // AttributedString creates tappable link attributes for them.
-        let preprocessed = linkifyBareURLs(in: text)
+        let needsMarkdown = text.contains("*") || text.contains("`")
+                         || text.contains("~~") || text.contains("[")
+        let needsLinkify  = text.contains("http://") || text.contains("https://")
+
+        // Fast path: plain text and emoji — no markdown processing needed.
+        guard needsMarkdown || needsLinkify else {
+            return AttributedString(text)
+        }
+
+        let preprocessed = needsLinkify ? linkifyBareURLs(in: text) : text
 
         if let attributed = try? AttributedString(
             markdown: preprocessed,
