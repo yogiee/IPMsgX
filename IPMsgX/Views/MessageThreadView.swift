@@ -14,7 +14,6 @@ struct MessageThreadView: View {
     @Environment(AppState.self) private var appState
     @State private var replyText = ""
     @State private var emojiPickerShown = false
-    @State private var emojiTargetTextView: NSTextView? = nil
     @AppStorage("cmdEnterToSend") private var cmdEnterToSend: Bool = false
 
     var body: some View {
@@ -46,17 +45,12 @@ struct MessageThreadView: View {
                 // Formatting toolbar
                 HStack(spacing: 1) {
                     ComposeToolbarButton(systemImage: "face.smiling") {
-                        emojiTargetTextView = NSApp.keyWindow?.firstResponder as? NSTextView
                         emojiPickerShown = true
                     }
                     .help("Emoji picker")
                     .popover(isPresented: $emojiPickerShown, arrowEdge: .bottom) {
                         EmojiPickerView { emoji in
-                            if let tv = emojiTargetTextView {
-                                tv.insertText(emoji, replacementRange: tv.selectedRange())
-                            } else {
-                                replyText += emoji
-                            }
+                            replyText += emoji
                             emojiPickerShown = false
                         }
                     }
@@ -111,10 +105,18 @@ struct MessageThreadView: View {
                         .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 8))
                         .onKeyPress(keys: [.return]) { press in
                             let plainReturn = press.modifiers.isEmpty
-                            let cmdReturn = press.modifiers.contains(.command)
-                            // send on plain Return (default) or ⌘Return (when cmdEnterToSend is on)
+                            let shiftReturn = press.modifiers == .shift
+                            let cmdReturn   = press.modifiers.contains(.command)
                             if (!cmdEnterToSend && plainReturn) || cmdReturn {
                                 if !replyText.isEmpty { sendReply() }
+                                return .handled
+                            }
+                            if shiftReturn {
+                                // TextField(axis:.vertical) doesn't insert \n on Shift+Return
+                                // by itself; the field editor (NSTextView) needs an explicit call.
+                                if let tv = NSApp.keyWindow?.firstResponder as? NSTextView {
+                                    tv.insertText("\n", replacementRange: tv.selectedRange())
+                                }
                                 return .handled
                             }
                             return .ignored

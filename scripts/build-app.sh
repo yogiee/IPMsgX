@@ -10,8 +10,8 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 BUILD_DIR="$PROJECT_DIR/build"
 APP_NAME="IPMsgX"
 BUNDLE_ID="com.ipmsgx.app"
-VERSION="1.2"
-BUILD_NUMBER="3"
+VERSION="1.2.1"
+BUILD_NUMBER="4"
 
 echo "=== Building $APP_NAME ($CONFIG) ==="
 
