@@ -326,13 +326,15 @@ private struct ChatBubbleView: View {
 
     @ViewBuilder
     private var renderedMessage: some View {
-        if let attributed = try? AttributedString(
-            markdown: item.message,
-            options: .init(interpretedSyntax: .full)
-        ) {
-            Text(attributed)
+        let sanitized = MessageRenderer.sanitize(item.message)
+        if sanitized.isEmpty, item.hasAttachments {
+            Label(
+                item.attachmentCount == 1 ? "1 attachment" : "\(item.attachmentCount) attachments",
+                systemImage: "paperclip"
+            )
+            .foregroundStyle(.secondary)
         } else {
-            Text(item.message)
+            Text(MessageRenderer.render(item.message))
         }
     }
 }

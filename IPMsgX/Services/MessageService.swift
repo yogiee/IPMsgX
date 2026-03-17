@@ -414,7 +414,23 @@ actor MessageService {
                 attachments = IPMsgAttachmentParser.parseAttachmentList(optStr)
             } else if let opt = packet.appendixOption {
                 attachments = IPMsgAttachmentParser.parseAttachmentList(opt)
+            } else {
+                // Fallback: some Windows clients embed attachment info directly in the
+                // appendix field without a NUL separator (e.g. "0:file.mp4:SIZE:TIME:ATTR:\x07").
+                // Try treating the appendix as attachment data.
+                let parsed = IPMsgAttachmentParser.parseAttachmentList(messageText)
+                if !parsed.isEmpty {
+                    attachments = parsed
+                    messageText = ""   // appendix was metadata, not a user message
+                }
             }
+        }
+
+        // Strip any residual protocol control characters (NUL / BEL) from message text.
+        // These can appear when Windows encodes a file-only message with no explicit separator.
+        if let idx = messageText.firstIndex(where: { $0 == "\0" || $0 == "\u{07}" }) {
+            messageText = String(messageText[..<idx])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
         // Build received message

@@ -88,13 +88,16 @@ struct ReceiveWindowContent: View {
                 ZStack {
                     ScrollView {
                         Group {
-                            if let attributed = try? AttributedString(
-                                markdown: viewModel.message.message,
-                                options: .init(interpretedSyntax: .full)
-                            ) {
-                                Text(attributed)
+                            let sanitized = MessageRenderer.sanitize(viewModel.message.message)
+                            if sanitized.isEmpty, !viewModel.message.attachments.isEmpty {
+                                Label(
+                                    viewModel.message.attachments.count == 1
+                                        ? "1 attachment" : "\(viewModel.message.attachments.count) attachments",
+                                    systemImage: "paperclip"
+                                )
+                                .foregroundStyle(.secondary)
                             } else {
-                                Text(viewModel.message.message)
+                                Text(MessageRenderer.render(viewModel.message.message))
                             }
                         }
                         .textSelection(.enabled)
