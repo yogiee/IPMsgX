@@ -19,7 +19,6 @@ extension Bundle {
 @main
 struct IPMsgXApp: App {
     @State private var appState = AppState()
-    @State private var sendRequest: SendRequest?
     @State private var currentReceiveMessage: ReceivedMessage?
     @State private var lastReceivePacketNo: Int?
     @State private var windowObserver = WindowObserver()
@@ -49,7 +48,7 @@ struct IPMsgXApp: App {
     var body: some Scene {
         // Main window (single instance — prevents duplicate windows)
         Window("IPMsgX", id: "main") {
-            MainWindow()
+            MainWindowProxy(appState: appState)
                 .environment(appState)
                 .modelContainer(PersistenceController.sharedModelContainer)
                 .task {
@@ -58,19 +57,6 @@ struct IPMsgXApp: App {
                     windowObserver.start()
                     setAppIcon()
                     ClipboardImageManager.cleanupOldFiles()
-                }
-                .onReceive(NotificationCenter.default.publisher(for: .openNewSendWindow)) { _ in
-                    sendRequest = SendRequest(preselectedUser: nil)
-                }
-                .onReceive(NotificationCenter.default.publisher(for: .openSendWindowToUser)) { notification in
-                    if let user = notification.userInfo?["user"] as? UserInfo {
-                        sendRequest = SendRequest(preselectedUser: user)
-                    }
-                }
-                .sheet(item: $sendRequest) { request in
-                    SendWindow(preselectedUser: request.preselectedUser)
-                        .environment(appState)
-                        .frame(minWidth: 500, minHeight: 450)
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .showReceivedMessage)) { notification in
                     guard let packetNo = notification.userInfo?["packetNo"] as? Int else { return }
@@ -108,6 +94,13 @@ struct IPMsgXApp: App {
         }
         .defaultSize(width: 800, height: 600)
 
+        // Compose window — standalone, opens without bringing the main window to front
+        Window("New Message", id: "compose") {
+            SendWindow(preselectedUser: appState.composePreselectedUser)
+                .environment(appState)
+        }
+        .defaultSize(width: 500, height: 450)
+
         // Message History window
         Window("Message History", id: "message-history") {
             MessageHistoryView()
@@ -140,10 +133,39 @@ struct IPMsgXApp: App {
     }
 }
 
+/// Wraps MainWindow so that `.openNewSendWindow` and `.openSendWindowToUser` notifications
+/// can call `openWindow(id: "compose")` — `@Environment(\.openWindow)` is only available
+/// inside a View, not directly in the App body.
+private struct MainWindowProxy: View {
+    let appState: AppState
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        MainWindow()
+            .onReceive(NotificationCenter.default.publisher(for: .openNewSendWindow)) { _ in
+                appState.composePreselectedUser = nil
+                openWindow(id: "compose")
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openSendWindowToUser)) { notification in
+                if let user = notification.userInfo?["user"] as? UserInfo {
+                    appState.composePreselectedUser = user
+                    openWindow(id: "compose")
+                }
+            }
+    }
+}
+
 /// Menu bar icon — uses Foundation notification to reliably update badge count
 /// (MenuBarExtra label doesn't support @Observable tracking properly)
+///
+/// Notification behaviour:
+///   • New message arrives → 2-loop outline ↔ fill animation, then settles on
+///                           message.fill while unread > 0
+///   • All messages read   → reverts to custom branded icon
 private struct MenuBarLabel: View {
     @State private var badge: Int = 0
+    @State private var showFilled: Bool = false
+    @State private var animationTask: Task<Void, Never>? = nil
 
     var body: some View {
         HStack(spacing: 2) {
@@ -155,18 +177,47 @@ private struct MenuBarLabel: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .badgeCountChanged)) { note in
-            badge = note.userInfo?["count"] as? Int ?? 0
+            let newBadge = note.userInfo?["count"] as? Int ?? 0
+            let increased = newBadge > badge
+            badge = newBadge
+
+            if increased {
+                animationTask?.cancel()
+                animationTask = Task { await animateArrival() }
+            } else if badge == 0 {
+                animationTask?.cancel()
+                showFilled = false
+            }
         }
     }
 
     @ViewBuilder
     private var menuBarImage: some View {
-        if let img = Bundle.appResources.image(forResource: "MenuBarIcon") {
-            Image(nsImage: img)
-        } else if let img = NSImage(named: "MenuBarIcon") {
-            Image(nsImage: img)
+        if badge > 0 || showFilled {
+            Image(systemName: showFilled ? "message.fill" : "message")
         } else {
-            Image(systemName: "message.fill")
+            if let img = Bundle.appResources.image(forResource: "MenuBarIcon") {
+                Image(nsImage: img)
+            } else if let img = NSImage(named: "MenuBarIcon") {
+                Image(nsImage: img)
+            } else {
+                Image(systemName: "message.fill")
+            }
         }
+    }
+
+    /// Toggles outline ↔ fill 4 times (2 full loops) at 350 ms per half-cycle,
+    /// then settles on filled while there are unread messages.
+    private func animateArrival() async {
+        showFilled = false
+        for _ in 0..<4 {
+            showFilled.toggle()
+            do {
+                try await Task.sleep(for: .milliseconds(350))
+            } catch {
+                break
+            }
+        }
+        showFilled = badge > 0
     }
 }
