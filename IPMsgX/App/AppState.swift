@@ -20,6 +20,9 @@ final class AppState {
         receivedMessages.filter { !$0.isAbsenceReply && !readPacketNos.contains($0.packetNo) }.count
     }
 
+    /// Preselected user for the compose window — set before calling openWindow(id: "compose").
+    var composePreselectedUser: UserInfo? = nil
+
     var onlineUsers: [UserInfo] = []
     var receivedMessages: [ReceivedMessage] = []
     var sentMessages: [SentMessage] = []

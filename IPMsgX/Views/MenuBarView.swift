@@ -92,10 +92,8 @@ struct MenuBarView: View {
             // Section 3: Menu items
             VStack(spacing: 1) {
                 MenuItemRow(icon: "square.and.pencil", title: "New Message", shortcut: "N") {
-                    showMainWindow()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        NotificationCenter.default.post(name: .openNewSendWindow, object: nil)
-                    }
+                    appState.composePreselectedUser = nil
+                    openWindow(id: "compose")
                 }
 
                 MenuItemRow(icon: "macwindow", title: "Main Window") {

@@ -70,11 +70,8 @@ struct SidebarView: View {
     }
 
     private func openSendWindow(to user: UserInfo) {
-        NotificationCenter.default.post(
-            name: .openSendWindowToUser,
-            object: nil,
-            userInfo: ["user": user]
-        )
+        appState.composePreselectedUser = user
+        openWindow(id: "compose")
     }
 
     private var filteredOnlineUsers: [UserInfo] {
