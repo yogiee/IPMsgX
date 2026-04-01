@@ -221,6 +221,14 @@ final class SettingsService: @unchecked Sendable {
         set { defaults.set(newValue, forKey: "alternateLogFile") }
     }
 
+    // MARK: - Updates
+
+    /// 0 = auto-update, 1 = download + ask, 2 = disabled
+    var updateMode: Int {
+        get { defaults.object(forKey: "updateMode") as? Int ?? 0 }
+        set { defaults.set(newValue, forKey: "updateMode") }
+    }
+
     // MARK: - RSA Key Cache
 
     var rsa2048PublicKeyExponent: Int {

@@ -24,6 +24,13 @@ struct IPMsgCommands: Commands {
             .keyboardShortcut("r", modifiers: [.command, .shift])
         }
 
+        // Updates
+        CommandGroup(after: .appInfo) {
+            Button("Check for Updates…") {
+                UpdaterService.shared.checkForUpdates()
+            }
+        }
+
         // Absence Mode
         CommandMenu("Absence") {
             Button("Normal (Not Absent)") {
