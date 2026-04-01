@@ -19,6 +19,8 @@ extension Bundle {
 @main
 struct IPMsgXApp: App {
     @State private var appState = AppState()
+    // Initializing here ensures Sparkle starts at app launch
+    private let updaterService = UpdaterService.shared
     @State private var currentReceiveMessage: ReceivedMessage?
     @State private var lastReceivePacketNo: Int?
     @State private var windowObserver = WindowObserver()

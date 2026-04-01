@@ -33,6 +33,10 @@ struct SettingsView: View {
             Tab("Log", systemImage: "doc.text") {
                 LogSettingsView()
             }
+
+            Tab("Updates", systemImage: "arrow.down.circle") {
+                UpdatesSettingsView()
+            }
         }
         .frame(width: 500)
     }

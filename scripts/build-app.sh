@@ -10,8 +10,12 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 BUILD_DIR="$PROJECT_DIR/build"
 APP_NAME="IPMsgX"
 BUNDLE_ID="com.ipmsgx.app"
-VERSION="1.3.1"
-BUILD_NUMBER="7"
+VERSION="1.4.0"
+BUILD_NUMBER="8"
+# EdDSA public key for Sparkle update verification.
+# Generated with: .build/artifacts/sparkle/Sparkle/bin/generate_keys
+# Private key is stored in Keychain. Do NOT change this key without re-signing all releases.
+SPARKLE_PUBLIC_KEY="${SPARKLE_PUBLIC_KEY:-k47OPDePNJN2Iyiu28Hz73RzNv/GHyryeSPWvGhv1+c=}"
 
 echo "=== Building $APP_NAME ($CONFIG) ==="
 
@@ -37,9 +41,18 @@ rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
 
-# Step 3: Copy executable
-echo "  [3/7] Copying executable..."
+# Step 3: Copy executable and bundle Sparkle framework
+echo "  [3/7] Copying executable and frameworks..."
 cp "$BUILT_BINARY" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
+
+# Bundle Sparkle.framework — SPM links against it but doesn't copy it into the .app
+SPARKLE_FRAMEWORK="$PROJECT_DIR/.build/arm64-apple-macosx/release/Sparkle.framework"
+if [ -d "$SPARKLE_FRAMEWORK" ]; then
+    mkdir -p "$APP_BUNDLE/Contents/Frameworks"
+    cp -R "$SPARKLE_FRAMEWORK" "$APP_BUNDLE/Contents/Frameworks/"
+    # Add rpath so the binary can find frameworks in Contents/Frameworks/
+    install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP_BUNDLE/Contents/MacOS/$APP_NAME" 2>/dev/null || true
+fi
 
 # SPM resource bundle contents are already in Contents/Resources/ via actool and manual copies
 # No need to copy the SPM resource bundle — Bundle.main handles it in .app context
@@ -85,6 +98,10 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << PLISTEOF
 	</array>
 	<key>LSUIElement</key>
 	<false/>
+	<key>SUFeedURL</key>
+	<string>https://raw.githubusercontent.com/yogiee/IPMsgX/main/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>$SPARKLE_PUBLIC_KEY</string>
 </dict>
 </plist>
 PLISTEOF
@@ -200,6 +217,26 @@ APPLESCRIPT
     hdiutil convert "$TMP_DMG" -format UDZO -imagekey zlib-level=9 -o "$DMG_PATH" > /dev/null
     rm -f "$TMP_DMG"
     rm -rf "$STAGING_DIR"
+
+    # Sign the DMG with EdDSA for Sparkle update verification
+    SIGN_UPDATE="$PROJECT_DIR/.build/artifacts/sparkle/Sparkle/bin/sign_update"
+    if [ -f "$SIGN_UPDATE" ] && [ "$SPARKLE_PUBLIC_KEY" != "REPLACE_WITH_GENERATED_EDDSA_PUBLIC_KEY" ]; then
+        echo "  Signing DMG for Sparkle..."
+        EDDSA_SIG=$("$SIGN_UPDATE" "$DMG_PATH" 2>/dev/null | grep "sparkle:edSignature" | sed 's/.*sparkle:edSignature="\([^"]*\)".*/\1/')
+        if [ -n "$EDDSA_SIG" ]; then
+            DMG_SIZE=$(stat -f%z "$DMG_PATH")
+            echo "  EdDSA signature: $EDDSA_SIG"
+            echo "  DMG size: $DMG_SIZE bytes"
+            echo ""
+            echo "  *** Update appcast.xml with:"
+            echo "      sparkle:edSignature=\"$EDDSA_SIG\""
+            echo "      length=\"$DMG_SIZE\""
+        fi
+    else
+        echo "  Note: Sparkle sign_update not found or key not set — skipping DMG signing."
+        echo "  After 'swift package resolve', generate keys with:"
+        echo "    .build/artifacts/sparkle/Sparkle/bin/generate_keys"
+    fi
 
     echo ""
     echo "=== Build complete ==="

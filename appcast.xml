@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Sparkle appcast for IPMsgX
+  Hosted at: https://raw.githubusercontent.com/yogiee/IPMsgX/main/appcast.xml
+
+  To add a new release:
+  1. Build: bash scripts/build-app.sh release
+  2. Copy sparkle:edSignature and length from build output
+  3. Upload DMG to GitHub release as an asset
+  4. Add <item> block below (newest first) and commit + push
+-->
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
+     xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel>
+        <title>IPMsgX</title>
+        <link>https://github.com/yogiee/IPMsgX</link>
+        <description>Most recent changes with links to updates.</description>
+        <language>en</language>
+
+        <item>
+            <title>Version 1.4.0</title>
+            <sparkle:releaseNotesLink>
+                https://github.com/yogiee/IPMsgX/releases/tag/v1.4.0
+            </sparkle:releaseNotesLink>
+            <pubDate>Tue, 01 Apr 2026 15:30:00 +0000</pubDate>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure
+                url="https://github.com/yogiee/IPMsgX/releases/download/v1.4.0/IPMsgX.dmg"
+                sparkle:version="8"
+                sparkle:shortVersionString="1.4.0"
+                sparkle:edSignature="og2HSxFBVgXeacoNSimeRPzKhjAVFlevG7Fzc56q5UIOV0RWcdcIv2hSjJXEa2Xka2pUHjOA2v6MTa+CQmghDg=="
+                length="1928208"
+                type="application/octet-stream" />
+        </item>
+
+    </channel>
+</rss>
