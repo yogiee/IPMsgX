@@ -38,6 +38,7 @@ actor MessageService {
     let events: AsyncStream<MessageEvent>
 
     private var receiveTask: Task<Void, Never>?
+    private var refreshTask: Task<Void, Never>?
 
     init(
         settings: SettingsService = .shared,
@@ -116,6 +117,16 @@ actor MessageService {
 
             // Broadcast entry
             await broadcastEntry()
+
+            // Periodic refresh: re-broadcast every 90 s and cull non-responsive users
+            refreshTask = Task { [weak self] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(90))
+                    guard !Task.isCancelled else { break }
+                    await self?.refreshUserList()
+                }
+            }
+
             logger.info("MessageService started")
         } catch {
             logger.error("Failed to start MessageService: \(error)")
@@ -123,12 +134,23 @@ actor MessageService {
     }
 
     func stop() async {
+        refreshTask?.cancel()
+        refreshTask = nil
         await broadcastExit()
         receiveTask?.cancel()
         receiveTask = nil
         await tcpFileServer.stop()
         await transport.stop()
         logger.info("MessageService stopped")
+    }
+
+    /// Broadcast entry to prompt all online users to re-announce themselves,
+    /// then remove any users who did not respond within 5 seconds.
+    func refreshUserList() async {
+        let cutoff = Date()
+        await broadcastEntry()
+        try? await Task.sleep(for: .seconds(5))
+        await userService.removeStale(before: cutoff)
     }
 
     // MARK: - Receiving

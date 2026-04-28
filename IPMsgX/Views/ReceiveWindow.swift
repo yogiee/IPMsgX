@@ -5,13 +5,14 @@ import SwiftUI
 
 struct ReceiveWindow: View {
     let message: ReceivedMessage
+    var onClose: (() -> Void)? = nil
     @Environment(AppState.self) private var appState
     @State private var viewModel: ReceiveViewModel?
 
     var body: some View {
         Group {
             if let viewModel {
-                ReceiveWindowContent(viewModel: viewModel)
+                ReceiveWindowContent(viewModel: viewModel, onClose: onClose)
             } else {
                 ProgressView()
             }
@@ -27,7 +28,12 @@ struct ReceiveWindow: View {
 
 struct ReceiveWindowContent: View {
     @Bindable var viewModel: ReceiveViewModel
+    var onClose: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
+
+    private func closeWindow() {
+        if let onClose { onClose() } else { dismiss() }
+    }
 
     var body: some View {
         ZStack {
@@ -168,7 +174,7 @@ struct ReceiveWindowContent: View {
                             Button("Send Reply") {
                                 Task {
                                     await viewModel.reply()
-                                    dismiss()
+                                    closeWindow()
                                 }
                             }
                             .keyboardShortcut(.defaultAction)
@@ -185,7 +191,7 @@ struct ReceiveWindowContent: View {
                         .keyboardShortcut("r", modifiers: .command)
 
                         Button("Close") {
-                            dismiss()
+                            closeWindow()
                         }
                         .keyboardShortcut(.cancelAction)
                     }

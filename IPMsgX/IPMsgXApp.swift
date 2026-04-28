@@ -19,10 +19,7 @@ extension Bundle {
 @main
 struct IPMsgXApp: App {
     @State private var appState = AppState()
-    // Initializing here ensures Sparkle starts at app launch
     private let updaterService = UpdaterService.shared
-    @State private var currentReceiveMessage: ReceivedMessage?
-    @State private var lastReceivePacketNo: Int?
     @State private var windowObserver = WindowObserver()
 
     init() {
@@ -60,45 +57,23 @@ struct IPMsgXApp: App {
                     setAppIcon()
                     ClipboardImageManager.cleanupOldFiles()
                 }
-                .onReceive(NotificationCenter.default.publisher(for: .showReceivedMessage)) { notification in
-                    guard let packetNo = notification.userInfo?["packetNo"] as? Int else { return }
-                    NSApp.activate(ignoringOtherApps: true)
-                    appState.showMessage(packetNo: packetNo)
-                }
-                .onChange(of: appState.pendingReceiveCount) {
-                    if let msg = appState.popPendingReceive() {
-                        currentReceiveMessage = msg
-                    }
-                }
-                .onChange(of: currentReceiveMessage?.packetNo) { _, newPacketNo in
-                    if let pn = newPacketNo {
-                        lastReceivePacketNo = pn
-                    }
-                }
-                .sheet(item: $currentReceiveMessage, onDismiss: {
-                    if let pn = lastReceivePacketNo {
-                        appState.markRead(packetNo: pn)
-                    }
-                    // Show next queued message if any
-                    DispatchQueue.main.async {
-                        if let next = appState.popPendingReceive() {
-                            currentReceiveMessage = next
-                        }
-                    }
-                }) { msg in
-                    ReceiveWindow(message: msg)
-                        .environment(appState)
-                        .frame(minWidth: 400, minHeight: 300)
-                }
         }
         .commands {
             IPMsgCommands(appState: appState)
         }
         .defaultSize(width: 800, height: 600)
 
+        // Standalone receive window — shown by MenuBarView, never needs the main window
+        Window("Message Received", id: "receive") {
+            ReceiveWindowContainer()
+                .environment(appState)
+                .modelContainer(PersistenceController.sharedModelContainer)
+        }
+        .defaultSize(width: 480, height: 380)
+
         // Compose window — standalone, opens without bringing the main window to front
         Window("New Message", id: "compose") {
-            SendWindow(preselectedUser: appState.composePreselectedUser)
+            SendWindow()
                 .environment(appState)
         }
         .defaultSize(width: 500, height: 450)
@@ -145,15 +120,55 @@ private struct MainWindowProxy: View {
     var body: some View {
         MainWindow()
             .onReceive(NotificationCenter.default.publisher(for: .openNewSendWindow)) { _ in
-                appState.composePreselectedUser = nil
+                appState.requestCompose(user: nil)
                 openWindow(id: "compose")
             }
             .onReceive(NotificationCenter.default.publisher(for: .openSendWindowToUser)) { notification in
                 if let user = notification.userInfo?["user"] as? UserInfo {
-                    appState.composePreselectedUser = user
+                    appState.requestCompose(user: user)
                     openWindow(id: "compose")
                 }
             }
+    }
+}
+
+/// Standalone receive window container — manages sequential display of pending messages.
+/// Lives in its own Window scene so it never requires the main window to be visible.
+private struct ReceiveWindowContainer: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.dismiss) private var dismissWindow
+    @State private var currentMessage: ReceivedMessage?
+    @State private var lastPacketNo: Int?
+
+    var body: some View {
+        Group {
+            if let msg = currentMessage {
+                ReceiveWindow(message: msg, onClose: handleClose)
+            } else {
+                Color.clear.frame(width: 480, height: 380)
+            }
+        }
+        .onAppear { showNext() }
+        .onChange(of: appState.pendingReceiveCount) { showNext() }
+    }
+
+    private func showNext() {
+        guard currentMessage == nil else { return }
+        if let msg = appState.popPendingReceive() {
+            currentMessage = msg
+            lastPacketNo = msg.packetNo
+        } else {
+            dismissWindow()
+        }
+    }
+
+    private func handleClose() {
+        if let pn = lastPacketNo {
+            appState.markRead(packetNo: pn)
+        }
+        currentMessage = nil
+        // Yield to the run loop so SwiftUI removes the old view before loading the next
+        DispatchQueue.main.async { showNext() }
     }
 }
 

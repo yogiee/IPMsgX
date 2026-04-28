@@ -20,8 +20,15 @@ final class AppState {
         receivedMessages.filter { !$0.isAbsenceReply && !readPacketNos.contains($0.packetNo) }.count
     }
 
-    /// Preselected user for the compose window — set before calling openWindow(id: "compose").
-    var composePreselectedUser: UserInfo? = nil
+    /// Preselected user for the compose window. Always set via requestCompose(user:).
+    private(set) var composePreselectedUser: UserInfo? = nil
+    /// Bumped on every compose request so SendWindow's onChange fires even for nil → nil.
+    private(set) var composeRequestToken: UUID = UUID()
+
+    func requestCompose(user: UserInfo?) {
+        composePreselectedUser = user
+        composeRequestToken = UUID()
+    }
 
     var onlineUsers: [UserInfo] = []
     var receivedMessages: [ReceivedMessage] = []
@@ -150,11 +157,10 @@ final class AppState {
         await service.start()
         logger.info("AppState started, service running")
 
-        // Re-broadcast entry after a short delay for reliability
-        // (first broadcast may arrive before peers are ready)
+        // Re-broadcast after a short delay and cull any non-responsive users
         Task {
             try? await Task.sleep(for: .seconds(3))
-            await service.broadcastEntry()
+            await service.refreshUserList()
         }
     }
 
