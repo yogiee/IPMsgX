@@ -28,14 +28,29 @@ actor UserService {
     }
 
     func addOrUpdate(_ user: UserInfo) {
-        if users[user.id] != nil {
-            users[user.id] = user
-            changeContinuation?.yield(.updated(user))
-            logger.info("Updated user: \(user.summaryString)")
+        var seen = user
+        seen.lastSeen = Date()
+        if users[seen.id] != nil {
+            users[seen.id] = seen
+            changeContinuation?.yield(.updated(seen))
+            logger.info("Updated user: \(seen.summaryString)")
         } else {
-            users[user.id] = user
-            changeContinuation?.yield(.added(user))
-            logger.info("Added user: \(user.summaryString)")
+            users[seen.id] = seen
+            changeContinuation?.yield(.added(seen))
+            logger.info("Added user: \(seen.summaryString)")
+        }
+    }
+
+    /// Remove users whose lastSeen timestamp predates `cutoff`.
+    func removeStale(before cutoff: Date) {
+        let staleIDs = users.filter { $0.value.lastSeen < cutoff }.map { $0.key }
+        for id in staleIDs {
+            users.removeValue(forKey: id)
+            changeContinuation?.yield(.removed(id))
+            logger.info("Removed stale user: \(id.logOnName)@\(id.ipAddress)")
+        }
+        if !staleIDs.isEmpty {
+            logger.info("Stale user sweep removed \(staleIDs.count) user(s)")
         }
     }
 

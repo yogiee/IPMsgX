@@ -19,6 +19,7 @@ struct UserInfo: Identifiable, Hashable, Sendable {
     var groupName: String?
     var version: String?
     var inAbsence: Bool
+    var lastSeen: Date = Date()
     var dialupConnect: Bool
     var supportsAttachment: Bool
     var supportsEncrypt: Bool

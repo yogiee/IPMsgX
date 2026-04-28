@@ -92,7 +92,7 @@ struct MenuBarView: View {
             // Section 3: Menu items
             VStack(spacing: 1) {
                 MenuItemRow(icon: "square.and.pencil", title: "New Message", shortcut: "N") {
-                    appState.composePreselectedUser = nil
+                    appState.requestCompose(user: nil)
                     openWindow(id: "compose")
                 }
 
@@ -119,12 +119,18 @@ struct MenuBarView: View {
             .padding(.vertical, 4)
         }
         .frame(width: 220)
+        // Open receive window when new messages arrive (auto-popup path)
+        .onChange(of: appState.pendingReceiveCount) { _, count in
+            guard count > 0 else { return }
+            NSApp.activate(ignoringOtherApps: true)
+            openWindow(id: "receive")
+        }
         // Handle notification banner taps — MenuBarView always exists so this always fires
         .onReceive(NotificationCenter.default.publisher(for: .showReceivedMessage)) { notification in
             guard let packetNo = notification.userInfo?["packetNo"] as? Int else { return }
-            ensureMainWindowExists()
-            NSApp.activate(ignoringOtherApps: true)
             appState.showMessage(packetNo: packetNo)
+            NSApp.activate(ignoringOtherApps: true)
+            openWindow(id: "receive")
         }
     }
 

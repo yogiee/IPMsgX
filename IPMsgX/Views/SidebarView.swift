@@ -70,7 +70,7 @@ struct SidebarView: View {
     }
 
     private func openSendWindow(to user: UserInfo) {
-        appState.composePreselectedUser = user
+        appState.requestCompose(user: user)
         openWindow(id: "compose")
     }
 

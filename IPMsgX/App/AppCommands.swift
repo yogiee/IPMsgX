@@ -18,7 +18,7 @@ struct IPMsgCommands: Commands {
         CommandGroup(after: .newItem) {
             Button("Refresh User List") {
                 Task {
-                    await appState.messageService?.broadcastEntry()
+                    await appState.messageService?.refreshUserList()
                 }
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
