@@ -118,11 +118,13 @@ enum IPMsgPacketBuilder {
             appendixData.append(optionData)
         }
 
+        let finalCommand = useUTF8 ? (command | IPMsgOption.utf8Opt.rawValue) : command
+
         return buildPacket(
             packetNo: packetNo,
             logOnUser: logOnUser,
             hostName: hostName,
-            command: command,
+            command: finalCommand,
             appendixData: appendixData
         )
     }
@@ -155,11 +157,13 @@ enum IPMsgPacketBuilder {
             appendixData.append(plainOption)
         }
 
+        let finalCommand = useUTF8 ? (command | IPMsgOption.utf8Opt.rawValue) : command
+
         return buildPacket(
             packetNo: packetNo,
             logOnUser: logOnUser,
             hostName: hostName,
-            command: command,
+            command: finalCommand,
             appendixData: appendixData
         )
     }
