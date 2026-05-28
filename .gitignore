@@ -47,3 +47,7 @@ WORKSPACE/
 .vscode/
 *.swp
 *.swo
+
+# Claude Code (per-machine, not for sharing)
+.claude/
+CLAUDE.md
