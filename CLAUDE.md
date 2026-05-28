@@ -1,5 +1,8 @@
 # IPMsgX — Claude Code Instructions
 
+## Stack
+swift, swiftui, macos
+
 ## Tools to Use
 
 - **Swift LSP** — use LSP tools for Swift code navigation, symbol lookup, hover type info, and diagnostics when working on any Swift source file. Use before and after every edit.
