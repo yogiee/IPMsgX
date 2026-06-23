@@ -16,8 +16,22 @@ extension Bundle {
     }
 }
 
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    var appState: AppState?
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let appState else { return .terminateNow }
+        Task { @MainActor in
+            await appState.stop()
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
+    }
+}
+
 @main
 struct IPMsgXApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var appState = AppState()
     private let updaterService = UpdaterService.shared
     @State private var windowObserver = WindowObserver()
@@ -51,6 +65,7 @@ struct IPMsgXApp: App {
                 .environment(appState)
                 .modelContainer(PersistenceController.sharedModelContainer)
                 .task {
+                    appDelegate.appState = appState
                     await appState.start()
                     NotificationService.shared.requestPermission()
                     windowObserver.start()

@@ -111,10 +111,7 @@ struct MenuBarView: View {
 
             // Quit
             MenuItemRow(icon: "power", title: "Quit IPMsgX", shortcut: "Q") {
-                Task {
-                    await appState.stop()
-                    NSApplication.shared.terminate(nil)
-                }
+                NSApplication.shared.terminate(nil)
             }
             .padding(.vertical, 4)
         }

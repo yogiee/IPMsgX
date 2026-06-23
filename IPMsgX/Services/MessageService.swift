@@ -39,6 +39,7 @@ actor MessageService {
 
     private var receiveTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?
+    private var hasStopped = false
 
     init(
         settings: SettingsService = .shared,
@@ -134,6 +135,8 @@ actor MessageService {
     }
 
     func stop() async {
+        guard !hasStopped else { return }
+        hasStopped = true
         refreshTask?.cancel()
         refreshTask = nil
         await broadcastExit()
