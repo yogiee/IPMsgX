@@ -31,20 +31,21 @@ struct IPMsgCommands: Commands {
             }
         }
 
-        // Absence Mode
+        // Absence Mode — checkmarks show the active state (Toggle renders a checkmark when on).
         CommandMenu("Absence") {
-            Button("Normal (Not Absent)") {
-                appState.toggleAbsence(index: nil)
-            }
-            .disabled(!appState.isAbsent)
+            Toggle("Available", isOn: Binding(
+                get: { !appState.isAbsent },
+                set: { if $0 { appState.toggleAbsence(index: nil) } }
+            ))
 
             Divider()
 
             let defs = SettingsService.shared.absenceDefinitions
             ForEach(Array(defs.enumerated()), id: \.offset) { idx, def in
-                Button(def.title) {
-                    appState.toggleAbsence(index: idx)
-                }
+                Toggle(def.title, isOn: Binding(
+                    get: { appState.isAbsent && appState.absenceIndex == idx },
+                    set: { if $0 { appState.toggleAbsence(index: idx) } }
+                ))
             }
         }
     }
@@ -57,6 +58,7 @@ struct IPMsgCommands: Commands {
 extension Notification.Name {
     static let openNewSendWindow = Notification.Name("com.ipmsgx.openNewSendWindow")
     static let openHistoryWindow = Notification.Name("com.ipmsgx.openHistoryWindow")
+    static let absenceChanged = Notification.Name("com.ipmsgx.absenceChanged")
     static let showReceivedMessage = Notification.Name("com.ipmsgx.showReceivedMessage")
     static let openSendWindowToUser = Notification.Name("com.ipmsgx.openSendWindowToUser")
     static let badgeCountChanged = Notification.Name("com.ipmsgx.badgeCountChanged")

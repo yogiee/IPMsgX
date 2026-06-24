@@ -10,6 +10,8 @@ private let logger = Logger(subsystem: "com.ipmsgx", category: "AppState")
 @MainActor
 final class AppState {
     var isAbsent: Bool = false
+    /// Index of the active absence definition (-1 when available). Observable so menus update.
+    var absenceIndex: Int = -1
     var networkConnected: Bool = false
 
     /// Packet numbers of messages the user has actually read (thread view or receive window).
@@ -152,6 +154,10 @@ final class AppState {
                                 name: .showReceivedMessage, object: nil,
                                 userInfo: ["packetNo": msg.packetNo]
                             )
+                        } else {
+                            // Non-popup/toast mode — bounce the Dock once to draw attention
+                            // (no-op if the app is already frontmost).
+                            NSApp.requestUserAttention(.informationalRequest)
                         }
                         // Play sound / post banner notification
                         ns.postIncomingMessage(msg)
@@ -191,11 +197,15 @@ final class AppState {
         let settings = SettingsService.shared
         if let index {
             settings.absenceIndex = index
+            absenceIndex = index
             isAbsent = true
         } else {
             settings.absenceIndex = -1
+            absenceIndex = -1
             isAbsent = false
         }
+        AppIcon.apply(absent: isAbsent)
+        NotificationCenter.default.post(name: .absenceChanged, object: nil, userInfo: ["absent": isAbsent])
         Task {
             await messageService?.broadcastAbsence()
         }

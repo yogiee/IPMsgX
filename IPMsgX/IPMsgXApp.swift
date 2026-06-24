@@ -140,16 +140,7 @@ struct IPMsgXApp: App {
     private func bootstrap() async {
         appDelegate.appState = appState
         await appState.bootstrap()
-        setAppIcon()
-    }
-
-    /// Set the app icon programmatically for task switcher (SPM doesn't auto-apply AppIcon from asset catalog)
-    private func setAppIcon() {
-        // Load standalone PNG from resource bundle (asset catalog imagesets aren't reliable in SPM)
-        if let url = Bundle.appResources.url(forResource: "AppIcon", withExtension: "png"),
-           let icon = NSImage(contentsOf: url) {
-            NSApp.applicationIconImage = icon
-        }
+        AppIcon.apply(absent: appState.isAbsent)
     }
 }
 
@@ -193,6 +184,7 @@ private struct ReceiveWindowHost: View {
 private struct MenuBarLabel: View {
     @State private var badge: Int = 0
     @State private var showFilled: Bool = false
+    @State private var isAbsent: Bool = false
     @State private var animationTask: Task<Void, Never>? = nil
 
     var body: some View {
@@ -217,11 +209,18 @@ private struct MenuBarLabel: View {
                 showFilled = false
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .absenceChanged)) { note in
+            isAbsent = note.userInfo?["absent"] as? Bool ?? false
+        }
     }
 
     @ViewBuilder
     private var menuBarImage: some View {
-        if badge > 0 || showFilled {
+        if isAbsent {
+            // Away state — distinct orange moon, mirroring the Dock's absence tint.
+            Image(systemName: "moon.fill")
+                .foregroundStyle(.orange)
+        } else if badge > 0 || showFilled {
             Image(systemName: showFilled ? "message.fill" : "message")
         } else {
             if let img = Bundle.appResources.image(forResource: "MenuBarIcon") {
