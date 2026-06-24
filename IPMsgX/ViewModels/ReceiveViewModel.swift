@@ -12,6 +12,15 @@ final class ReceiveViewModel {
     var replyText: String = ""
     var showReplyField: Bool = false
 
+    /// Whether to quote the original message in the reply. Defaults to the user's setting
+    /// but can be toggled per-reply (mirrors the original's Quote checkbox).
+    var quoteEnabled: Bool = SettingsService.shared.quoteCheckDefault
+
+    // Locked-message password prompt
+    var showPasswordPrompt: Bool = false
+    var passwordInput: String = ""
+    var passwordError: Bool = false
+
     var downloadProgress: DownloadProgress?
     var isDownloading: Bool = false
     var downloadError: String?
@@ -54,7 +63,38 @@ final class ReceiveViewModel {
         return nil
     }
 
-    func openSeal() async {
+    /// A locked message requires the receiver's own password to open — but only if the
+    /// receiver actually has a password set (otherwise there's nothing to validate against).
+    var requiresPassword: Bool {
+        message.isLocked && !SettingsService.shared.password.isEmpty
+    }
+
+    /// Called when the user clicks the seal cover. Locked messages prompt for the password;
+    /// otherwise the seal opens immediately.
+    func attemptOpenSeal() {
+        guard !isSealOpened else { return }
+        if requiresPassword {
+            passwordInput = ""
+            passwordError = false
+            showPasswordPrompt = true
+        } else {
+            Task { await revealSeal() }
+        }
+    }
+
+    /// Validate the entered password against the receiver's stored password.
+    func submitPassword() {
+        if passwordInput == SettingsService.shared.password {
+            showPasswordPrompt = false
+            passwordInput = ""
+            Task { await revealSeal() }
+        } else {
+            passwordError = true
+        }
+    }
+
+    /// Reveal the sealed content and notify the sender that the seal was opened.
+    private func revealSeal() async {
         isSealOpened = true
         appState.markSealOpened(packetNo: message.packetNo)
         await appState.openSeal(message: message)
@@ -65,7 +105,7 @@ final class ReceiveViewModel {
 
         let quotePrefix = SettingsService.shared.quoteString
         var replyMessage = replyText
-        if SettingsService.shared.quoteCheckDefault {
+        if quoteEnabled {
             let quoted = message.message.components(separatedBy: "\n")
                 .map { quotePrefix + $0 }
                 .joined(separator: "\n")

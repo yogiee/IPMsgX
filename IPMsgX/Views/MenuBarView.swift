@@ -113,18 +113,14 @@ struct MenuBarView: View {
             .padding(.vertical, 4)
         }
         .frame(width: 220)
-        // Open receive window when new messages arrive (auto-popup path)
-        .onChange(of: appState.pendingReceiveCount) { _, count in
-            guard count > 0 else { return }
-            NSApp.activate(ignoringOtherApps: true)
-            openWindow(id: "receive")
-        }
-        // Handle notification banner taps — MenuBarView always exists so this always fires
+        // Open a dedicated window for a message — fired both on auto-popup arrival and on a
+        // notification-banner tap. One window per packet; macOS cascades multiple windows, and
+        // re-opening the same packet just brings its window forward. Open first, then activate,
+        // so the message window becomes key rather than a previously-key Send window.
         .onReceive(NotificationCenter.default.publisher(for: .showReceivedMessage)) { notification in
             guard let packetNo = notification.userInfo?["packetNo"] as? Int else { return }
-            appState.showMessage(packetNo: packetNo)
+            openWindow(id: "receive", value: packetNo)
             NSApp.activate(ignoringOtherApps: true)
-            openWindow(id: "receive")
         }
         // Open the Send window from anywhere (menu "New Message", dock reopen, sidebar, etc.).
         // Hosted here because MenuBarView is always present, even when no window is open.
@@ -147,10 +143,12 @@ struct MenuBarView: View {
 
     // MARK: - Actions
 
-    /// Open all unread messages (queues them for sequential display in the receive window)
+    /// Open every unread message — one window each, cascaded by macOS.
     private func openUnreadMessages() {
+        for message in appState.unreadMessages {
+            openWindow(id: "receive", value: message.packetNo)
+        }
         NSApp.activate(ignoringOtherApps: true)
-        appState.queueAllUnreadForDisplay()
     }
 
     private var absenceLabel: String {

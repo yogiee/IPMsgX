@@ -283,7 +283,7 @@ private struct ChatBubbleView: View {
                     }
                     if item.hasAttachments, let packetNo = item.packetNo {
                         Button {
-                            appState.showMessage(packetNo: packetNo)
+                            NotificationCenter.default.post(name: .showReceivedMessage, object: nil, userInfo: ["packetNo": packetNo])
                         } label: {
                             Label("\(item.attachmentCount)", systemImage: "paperclip")
                                 .font(.caption2)
@@ -301,7 +301,7 @@ private struct ChatBubbleView: View {
             .contextMenu {
                 if let packetNo = item.packetNo {
                     Button("Open Message") {
-                        appState.showMessage(packetNo: packetNo)
+                        NotificationCenter.default.post(name: .showReceivedMessage, object: nil, userInfo: ["packetNo": packetNo])
                     }
                 }
             }

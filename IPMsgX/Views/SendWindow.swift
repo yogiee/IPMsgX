@@ -39,11 +39,9 @@ struct SendWindow: View {
             // Always build fresh — onAppear fires after requestCompose has set the user,
             // so composePreselectedUser is guaranteed current here.
             viewModel = SendViewModel(appState: appState, preselectedUser: appState.composePreselectedUser)
-            appState.composeWindowOpenCount += 1
         }
         .onDisappear {
             viewModel = nil
-            appState.composeWindowOpenCount = max(0, appState.composeWindowOpenCount - 1)
         }
         .onChange(of: appState.composeRequestToken) { _, _ in
             // Window already visible and a new request arrived — rebuild for new user.

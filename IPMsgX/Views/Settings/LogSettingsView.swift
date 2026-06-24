@@ -42,7 +42,6 @@ struct SendSettingsView: View {
             }
 
             Section("Behavior") {
-                Toggle("Open new message on Dock click", isOn: $settings.openNewOnDockClick)
                 Toggle("Close receive window on reply", isOn: $settings.hideReceiveWindowOnReply)
                 Toggle("Notify when seal is opened", isOn: $settings.noticeSealOpened)
             }

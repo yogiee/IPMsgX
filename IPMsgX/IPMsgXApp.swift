@@ -28,20 +28,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return .terminateLater
     }
 
-    /// Dock-icon click. We always let AppKit bring existing windows forward (return true).
-    /// When "Open new message on Dock click" is enabled (default), a click ALSO opens a new
-    /// Send window — but only if none is already open; otherwise we just surface what's there.
-    /// (macOS delivers a single reopen event per click, with no distinct double-click, so this
-    /// rule governs every Dock click.)
-    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
-        let shouldSpawn = MainActor.assumeIsolated {
-            SettingsService.shared.openNewOnDockClick && (appState?.composeWindowOpenCount ?? 0) == 0
-        }
-        if shouldSpawn {
-            NotificationCenter.default.post(name: .openNewSendWindow, object: nil)
-        }
-        return true
-    }
+    // NOTE: we intentionally do NOT implement applicationShouldHandleReopen. That callback fires
+    // on Dock clicks AND on notification-toast clicks, so spawning a Send window there would
+    // wrongly pop a Send window on top of an opened message. The default reopen behavior (bring
+    // existing windows forward) is what we want. Start a new message via ⌘N, the menu bar, or
+    // the Dock right-click menu.
 
     /// Dock right-click / click-and-hold menu. macOS appends the standard items (Options,
     /// Quit) below ours automatically, so we only add the app-specific actions.
@@ -120,13 +111,16 @@ struct IPMsgXApp: App {
         .defaultSize(width: 800, height: 600)
         .keyboardShortcut("h", modifiers: [.command, .shift])
 
-        // Standalone receive window — shown by MenuBarView, never needs any other window
-        Window("Message Received", id: "receive") {
-            ReceiveWindowContainer()
+        // Receive windows — one per message, keyed by packet number. Opening multiple distinct
+        // packets yields multiple windows (macOS cascades them); re-opening the same packet just
+        // brings its existing window forward.
+        WindowGroup(id: "receive", for: Int.self) { $packetNo in
+            ReceiveWindowHost(packetNo: packetNo)
                 .environment(appState)
                 .modelContainer(PersistenceController.sharedModelContainer)
         }
         .defaultSize(width: 480, height: 380)
+        .restorationBehavior(.disabled)  // don't resurrect stale message windows on relaunch
 
         // Menu bar extra
         MenuBarExtra {
@@ -159,43 +153,33 @@ struct IPMsgXApp: App {
     }
 }
 
-/// Standalone receive window container — manages sequential display of pending messages.
-/// Lives in its own Window scene so it never requires the main window to be visible.
-private struct ReceiveWindowContainer: View {
+/// Hosts a single received message in its own window, looked up by packet number.
+/// Opening a window for a packet marks that message read.
+private struct ReceiveWindowHost: View {
+    let packetNo: Int?
     @Environment(AppState.self) private var appState
-    @Environment(\.dismiss) private var dismissWindow
-    @State private var currentMessage: ReceivedMessage?
-    @State private var lastPacketNo: Int?
+    @Environment(\.dismiss) private var dismiss
+
+    private var message: ReceivedMessage? {
+        guard let packetNo else { return nil }
+        return appState.receivedMessages.first { $0.packetNo == packetNo }
+    }
 
     var body: some View {
         Group {
-            if let msg = currentMessage {
-                ReceiveWindow(message: msg, onClose: handleClose)
+            if let message {
+                ReceiveWindow(message: message)
+                    .onAppear { appState.markRead(packetNo: message.packetNo) }
             } else {
-                Color.clear.frame(width: 480, height: 380)
+                // Cold launch from a notification, or message culled — not in memory.
+                ContentUnavailableView(
+                    "Message Unavailable",
+                    systemImage: "envelope.open",
+                    description: Text("This message is no longer available. Open History to review past messages.")
+                )
+                .frame(width: 380, height: 220)
             }
         }
-        .onAppear { showNext() }
-        .onChange(of: appState.pendingReceiveCount) { showNext() }
-    }
-
-    private func showNext() {
-        guard currentMessage == nil else { return }
-        if let msg = appState.popPendingReceive() {
-            currentMessage = msg
-            lastPacketNo = msg.packetNo
-        } else {
-            dismissWindow()
-        }
-    }
-
-    private func handleClose() {
-        if let pn = lastPacketNo {
-            appState.markRead(packetNo: pn)
-        }
-        currentMessage = nil
-        // Yield to the run loop so SwiftUI removes the old view before loading the next
-        DispatchQueue.main.async { showNext() }
     }
 }
 

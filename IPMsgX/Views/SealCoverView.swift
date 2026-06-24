@@ -4,6 +4,7 @@
 import SwiftUI
 
 struct SealCoverView: View {
+    var isLocked: Bool = false
     let onOpen: () -> Void
 
     var body: some View {
@@ -12,19 +13,19 @@ struct SealCoverView: View {
                 .fill(.ultraThinMaterial)
 
             VStack(spacing: 16) {
-                Image(systemName: "envelope.fill")
+                Image(systemName: isLocked ? "lock.fill" : "envelope.fill")
                     .font(.system(size: 48))
                     .foregroundStyle(.secondary)
 
-                Text("Sealed Message")
+                Text(isLocked ? "Locked Message" : "Sealed Message")
                     .font(.title2)
                     .fontWeight(.medium)
 
-                Text("Click to open the seal")
+                Text(isLocked ? "A password is required to open this message" : "Click to open the seal")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                Button("Open Seal") {
+                Button(isLocked ? "Open (Locked)…" : "Open Seal") {
                     onOpen()
                 }
                 .controlSize(.large)

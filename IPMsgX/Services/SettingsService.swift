@@ -92,11 +92,6 @@ final class SettingsService: @unchecked Sendable {
         set { defaults.set(newValue, forKey: "quoteString") }
     }
 
-    var openNewOnDockClick: Bool {
-        get { defaults.object(forKey: "openNewOnDockClick") as? Bool ?? true }
-        set { defaults.set(newValue, forKey: "openNewOnDockClick") }
-    }
-
     var sealCheckDefault: Bool {
         get { defaults.bool(forKey: "sealCheckDefault") }
         set { defaults.set(newValue, forKey: "sealCheckDefault") }

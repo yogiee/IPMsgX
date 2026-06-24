@@ -112,10 +112,8 @@ struct ReceiveWindowContent: View {
                     }
 
                     if !viewModel.isSealOpened {
-                        SealCoverView {
-                            Task {
-                                await viewModel.openSeal()
-                            }
+                        SealCoverView(isLocked: viewModel.message.isLocked) {
+                            viewModel.attemptOpenSeal()
                         }
                     }
                 }
@@ -166,6 +164,10 @@ struct ReceiveWindowContent: View {
                             .background(.background.secondary, in: RoundedRectangle(cornerRadius: 8))
 
                         HStack {
+                            Toggle("Quote", isOn: $viewModel.quoteEnabled)
+                                .toggleStyle(.checkbox)
+                                .font(.caption)
+                                .help("Include the original message, quoted, in your reply")
                             Spacer()
                             Button("Cancel") {
                                 viewModel.showReplyField = false
@@ -219,5 +221,55 @@ struct ReceiveWindowContent: View {
                 ImagePreviewView(url: url)
             }
         }
+        .sheet(isPresented: $viewModel.showPasswordPrompt) {
+            PasswordPromptView(viewModel: viewModel)
+        }
+    }
+}
+
+/// Password entry for opening a locked message. Validates against the receiver's own password.
+private struct PasswordPromptView: View {
+    @Bindable var viewModel: ReceiveViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Label("Locked Message", systemImage: "lock.fill")
+                .font(.headline)
+
+            Text("This message is locked. Enter your password to open it.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            SecureField("Password", text: $viewModel.passwordInput)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 240)
+                .onSubmit { viewModel.submitPassword() }
+
+            if viewModel.passwordError {
+                Label("Incorrect password", systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel") {
+                    viewModel.showPasswordPrompt = false
+                    viewModel.passwordInput = ""
+                    viewModel.passwordError = false
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Button("Open") {
+                    viewModel.submitPassword()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(viewModel.passwordInput.isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(minWidth: 320)
     }
 }

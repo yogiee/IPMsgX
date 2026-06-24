@@ -30,30 +30,18 @@ final class AppState {
         composeRequestToken = UUID()
     }
 
-    /// Number of Send windows currently open. Used to decide whether a Dock click should
-    /// spawn a new Send window or just bring existing windows forward.
-    var composeWindowOpenCount: Int = 0
-
     var onlineUsers: [UserInfo] = []
     var receivedMessages: [ReceivedMessage] = []
     var sentMessages: [SentMessage] = []
 
-    // Pending receive windows — use count for onChange tracking
-    var pendingReceiveCount: Int = 0
-    private var pendingReceiveQueue: [ReceivedMessage] = []
-
-    /// Tracks messages already shown/queued to prevent duplicate windows
-    private var displayedPacketNos: Set<Int> = []
     /// Tracks received sealed messages whose seal has been opened (by us)
     private var openedSealPacketNos: Set<Int> = []
     /// Tracks sent sealed messages whose seal was opened by the recipient
     var sentSealOpenedPacketNos: Set<Int> = []
 
-    func popPendingReceive() -> ReceivedMessage? {
-        guard !pendingReceiveQueue.isEmpty else { return nil }
-        let msg = pendingReceiveQueue.removeFirst()
-        displayedPacketNos.insert(msg.packetNo)
-        return msg
+    /// Unread, non-absence received messages — drives the badge and "open all unread".
+    var unreadMessages: [ReceivedMessage] {
+        receivedMessages.filter { !$0.isAbsenceReply && !readPacketNos.contains($0.packetNo) }
     }
 
     func isSealOpened(packetNo: Int) -> Bool {
@@ -154,9 +142,12 @@ final class AppState {
                             || (settings.nonPopupWhenAbsence && self.isAbsent)
                         )
                         if !bannerOnly {
-                            // Open receive window directly
-                            self.pendingReceiveQueue.append(msg)
-                            self.pendingReceiveCount += 1
+                            // Open a dedicated window for this message (MenuBarView listens
+                            // and opens a per-packet window; macOS cascades multiple windows).
+                            NotificationCenter.default.post(
+                                name: .showReceivedMessage, object: nil,
+                                userInfo: ["packetNo": msg.packetNo]
+                            )
                         }
                         // Play sound / post banner notification
                         ns.postIncomingMessage(msg)
@@ -253,30 +244,6 @@ final class AppState {
         }
         postBadgeUpdate()
         NotificationService.shared.removeAllMessageNotifications()
-    }
-
-    /// Queue a specific message for display in the receive window
-    func showMessage(packetNo: Int, force: Bool = false) {
-        guard force || !displayedPacketNos.contains(packetNo) else { return }
-        if let msg = receivedMessages.first(where: { $0.packetNo == packetNo }) {
-            displayedPacketNos.insert(packetNo)
-            pendingReceiveQueue.append(msg)
-            pendingReceiveCount += 1
-        }
-    }
-
-    /// Queue all unread messages for sequential display, and clear their notification banners.
-    func queueAllUnreadForDisplay() {
-        let unread = receivedMessages.filter {
-            !$0.isAbsenceReply && !readPacketNos.contains($0.packetNo) && !displayedPacketNos.contains($0.packetNo)
-        }
-        guard !unread.isEmpty else { return }
-        NotificationService.shared.removeNotifications(for: unread.map { $0.packetNo })
-        for msg in unread {
-            displayedPacketNos.insert(msg.packetNo)
-        }
-        pendingReceiveQueue.append(contentsOf: unread)
-        pendingReceiveCount += unread.count
     }
 
     private func postBadgeUpdate() {
