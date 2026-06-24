@@ -56,6 +56,7 @@ struct IPMsgCommands: Commands {
 
 extension Notification.Name {
     static let openNewSendWindow = Notification.Name("com.ipmsgx.openNewSendWindow")
+    static let openHistoryWindow = Notification.Name("com.ipmsgx.openHistoryWindow")
     static let showReceivedMessage = Notification.Name("com.ipmsgx.showReceivedMessage")
     static let openSendWindowToUser = Notification.Name("com.ipmsgx.openSendWindowToUser")
     static let badgeCountChanged = Notification.Name("com.ipmsgx.badgeCountChanged")

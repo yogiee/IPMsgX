@@ -27,6 +27,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         return .terminateLater
     }
+
+    /// Dock-icon click. We always let AppKit bring existing windows forward (return true).
+    /// When "Open new message on Dock click" is enabled (default), a click ALSO opens a new
+    /// Send window — but only if none is already open; otherwise we just surface what's there.
+    /// (macOS delivers a single reopen event per click, with no distinct double-click, so this
+    /// rule governs every Dock click.)
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        let shouldSpawn = MainActor.assumeIsolated {
+            SettingsService.shared.openNewOnDockClick && (appState?.composeWindowOpenCount ?? 0) == 0
+        }
+        if shouldSpawn {
+            NotificationCenter.default.post(name: .openNewSendWindow, object: nil)
+        }
+        return true
+    }
+
+    /// Dock right-click / click-and-hold menu. macOS appends the standard items (Options,
+    /// Quit) below ours automatically, so we only add the app-specific actions.
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        let menu = NSMenu()
+
+        let send = NSMenuItem(title: "Send Message", action: #selector(dockSendMessage), keyEquivalent: "")
+        send.target = self
+        menu.addItem(send)
+
+        let history = NSMenuItem(title: "Show History", action: #selector(dockShowHistory), keyEquivalent: "")
+        history.target = self
+        menu.addItem(history)
+
+        return menu
+    }
+
+    @objc private func dockSendMessage() {
+        NotificationCenter.default.post(name: .openNewSendWindow, object: nil)
+    }
+
+    @objc private func dockShowHistory() {
+        NotificationCenter.default.post(name: .openHistoryWindow, object: nil)
+    }
 }
 
 @main
@@ -34,7 +73,6 @@ struct IPMsgXApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var appState = AppState()
     private let updaterService = UpdaterService.shared
-    @State private var windowObserver = WindowObserver()
 
     init() {
         // Redirect stderr to a log file so NSLog output is visible even in release builds.
@@ -59,47 +97,36 @@ struct IPMsgXApp: App {
     }
 
     var body: some Scene {
-        // Main window (single instance — prevents duplicate windows)
-        Window("IPMsgX", id: "main") {
-            MainWindowProxy(appState: appState)
+        // PRIMARY interface — the Send window. This is the FIRST scene, so SwiftUI opens
+        // it at launch, mirroring the original IP Messenger where the send window is the hub.
+        Window("New Message", id: "compose") {
+            SendWindow()
                 .environment(appState)
-                .modelContainer(PersistenceController.sharedModelContainer)
-                .task {
-                    appDelegate.appState = appState
-                    await appState.start()
-                    NotificationService.shared.requestPermission()
-                    windowObserver.start()
-                    setAppIcon()
-                    ClipboardImageManager.cleanupOldFiles()
-                }
+                .task { await bootstrap() }
         }
+        .defaultSize(width: 500, height: 450)
         .commands {
             IPMsgCommands(appState: appState)
         }
-        .defaultSize(width: 800, height: 600)
 
-        // Standalone receive window — shown by MenuBarView, never needs the main window
+        // History window — sidebar + per-user conversation threads. This was the old "main"
+        // window, now demoted from primary interface to a history/browsing surface.
+        Window("History", id: "main") {
+            MainWindow()
+                .environment(appState)
+                .modelContainer(PersistenceController.sharedModelContainer)
+                .task { await bootstrap() }
+        }
+        .defaultSize(width: 800, height: 600)
+        .keyboardShortcut("h", modifiers: [.command, .shift])
+
+        // Standalone receive window — shown by MenuBarView, never needs any other window
         Window("Message Received", id: "receive") {
             ReceiveWindowContainer()
                 .environment(appState)
                 .modelContainer(PersistenceController.sharedModelContainer)
         }
         .defaultSize(width: 480, height: 380)
-
-        // Compose window — standalone, opens without bringing the main window to front
-        Window("New Message", id: "compose") {
-            SendWindow()
-                .environment(appState)
-        }
-        .defaultSize(width: 500, height: 450)
-
-        // Message History window
-        Window("Message History", id: "message-history") {
-            MessageHistoryView()
-                .modelContainer(PersistenceController.sharedModelContainer)
-        }
-        .defaultSize(width: 700, height: 500)
-        .keyboardShortcut("h", modifiers: [.command, .shift])
 
         // Menu bar extra
         MenuBarExtra {
@@ -115,6 +142,13 @@ struct IPMsgXApp: App {
         }
     }
 
+    /// One-time app bootstrap, attached to whichever window opens first. Idempotent.
+    private func bootstrap() async {
+        appDelegate.appState = appState
+        await appState.bootstrap()
+        setAppIcon()
+    }
+
     /// Set the app icon programmatically for task switcher (SPM doesn't auto-apply AppIcon from asset catalog)
     private func setAppIcon() {
         // Load standalone PNG from resource bundle (asset catalog imagesets aren't reliable in SPM)
@@ -122,28 +156,6 @@ struct IPMsgXApp: App {
            let icon = NSImage(contentsOf: url) {
             NSApp.applicationIconImage = icon
         }
-    }
-}
-
-/// Wraps MainWindow so that `.openNewSendWindow` and `.openSendWindowToUser` notifications
-/// can call `openWindow(id: "compose")` — `@Environment(\.openWindow)` is only available
-/// inside a View, not directly in the App body.
-private struct MainWindowProxy: View {
-    let appState: AppState
-    @Environment(\.openWindow) private var openWindow
-
-    var body: some View {
-        MainWindow()
-            .onReceive(NotificationCenter.default.publisher(for: .openNewSendWindow)) { _ in
-                appState.requestCompose(user: nil)
-                openWindow(id: "compose")
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .openSendWindowToUser)) { notification in
-                if let user = notification.userInfo?["user"] as? UserInfo {
-                    appState.requestCompose(user: user)
-                    openWindow(id: "compose")
-                }
-            }
     }
 }
 

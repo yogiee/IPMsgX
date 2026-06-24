@@ -94,14 +94,11 @@ struct MenuBarView: View {
                 MenuItemRow(icon: "square.and.pencil", title: "New Message", shortcut: "N") {
                     appState.requestCompose(user: nil)
                     openWindow(id: "compose")
+                    NSApp.activate(ignoringOtherApps: true)
                 }
 
-                MenuItemRow(icon: "macwindow", title: "Main Window") {
-                    showMainWindow()
-                }
-
-                MenuItemRow(icon: "clock.arrow.circlepath", title: "Message History", shortcut: "H") {
-                    openWindow(id: "message-history")
+                MenuItemRow(icon: "clock.arrow.circlepath", title: "History", shortcut: "H") {
+                    openWindow(id: "main")
                     NSApp.activate(ignoringOtherApps: true)
                 }
             }
@@ -129,26 +126,31 @@ struct MenuBarView: View {
             NSApp.activate(ignoringOtherApps: true)
             openWindow(id: "receive")
         }
+        // Open the Send window from anywhere (menu "New Message", dock reopen, sidebar, etc.).
+        // Hosted here because MenuBarView is always present, even when no window is open.
+        .onReceive(NotificationCenter.default.publisher(for: .openNewSendWindow)) { _ in
+            appState.requestCompose(user: nil)
+            NSApp.activate(ignoringOtherApps: true)
+            openWindow(id: "compose")
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openSendWindowToUser)) { notification in
+            guard let user = notification.userInfo?["user"] as? UserInfo else { return }
+            appState.requestCompose(user: user)
+            NSApp.activate(ignoringOtherApps: true)
+            openWindow(id: "compose")
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openHistoryWindow)) { _ in
+            openWindow(id: "main")
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 
     // MARK: - Actions
 
-    /// Open all unread messages (queues them for sequential display)
+    /// Open all unread messages (queues them for sequential display in the receive window)
     private func openUnreadMessages() {
-        ensureMainWindowExists()
         NSApp.activate(ignoringOtherApps: true)
         appState.queueAllUnreadForDisplay()
-    }
-
-    /// Bring the single main window to front (Window scene is single-instance)
-    private func showMainWindow() {
-        openWindow(id: "main")
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
-    /// Ensure the main window exists (idempotent for Window scenes)
-    private func ensureMainWindowExists() {
-        openWindow(id: "main")
     }
 
     private var absenceLabel: String {

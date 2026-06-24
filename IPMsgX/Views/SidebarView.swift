@@ -58,14 +58,6 @@ struct SidebarView: View {
                 }
                 .help("New Message")
             }
-            ToolbarItem(placement: .automatic) {
-                Button {
-                    openWindow(id: "message-history")
-                } label: {
-                    Image(systemName: "clock.arrow.circlepath")
-                }
-                .help("Message History")
-            }
         }
     }
 

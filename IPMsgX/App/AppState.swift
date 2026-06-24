@@ -30,6 +30,10 @@ final class AppState {
         composeRequestToken = UUID()
     }
 
+    /// Number of Send windows currently open. Used to decide whether a Dock click should
+    /// spawn a new Send window or just bring existing windows forward.
+    var composeWindowOpenCount: Int = 0
+
     var onlineUsers: [UserInfo] = []
     var receivedMessages: [ReceivedMessage] = []
     var sentMessages: [SentMessage] = []
@@ -62,6 +66,22 @@ final class AppState {
 
     private(set) var messageService: MessageService?
     private let networkMonitor = NetworkMonitor()
+
+    /// Manages NSApp activation policy (regular ↔ accessory) based on visible windows.
+    /// Owned here so app bootstrap no longer depends on any single window scene.
+    let windowObserver = WindowObserver()
+    private var didBootstrap = false
+
+    /// One-time app bootstrap. Idempotent — safe to call from multiple scene `.task`
+    /// blocks so service startup happens regardless of which window opens first.
+    func bootstrap() async {
+        guard !didBootstrap else { return }
+        didBootstrap = true
+        await start()
+        NotificationService.shared.requestPermission()
+        windowObserver.start()
+        ClipboardImageManager.cleanupOldFiles()
+    }
 
     private var userSyncTask: Task<Void, Never>?
     private var eventTask: Task<Void, Never>?
