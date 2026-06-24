@@ -51,3 +51,6 @@ WORKSPACE/
 # Claude Code (per-machine, not for sharing)
 .claude/
 CLAUDE.md
+
+# Claude reference notes (per-machine, not for sharing)
+memory/
