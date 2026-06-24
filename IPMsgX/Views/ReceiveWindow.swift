@@ -100,10 +100,9 @@ struct ReceiveWindowContent: View {
                         VStack(alignment: .leading, spacing: 12) {
                             let sanitized = MessageRenderer.sanitize(viewModel.message.message)
                             if !sanitized.isEmpty {
-                                Text(MessageRenderer.render(viewModel.message.message))
+                                MessageContentView(raw: viewModel.message.message)
                                     .font(SettingsService.shared.messageFont)
                                     .lineSpacing(SettingsService.shared.messageLineSpacing)
-                                    .textSelection(.enabled)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             } else if viewModel.inlineImages.isEmpty, viewModel.hasFileAttachments {
                                 Label(

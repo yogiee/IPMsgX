@@ -203,8 +203,7 @@ private struct HistoryChatBubble: View {
 
             VStack(alignment: isSent ? .trailing : .leading, spacing: 3) {
                 // Message body
-                Text(record.messageBody)
-                    .textSelection(.enabled)
+                MessageContentView(raw: record.messageBody)
                     .font(.body)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
