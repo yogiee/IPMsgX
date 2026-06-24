@@ -13,6 +13,9 @@ final class SendViewModel {
     var isLocked: Bool = false
     var searchText: String = ""
 
+    /// Sort order for the user table columns.
+    var sortOrder: [KeyPathComparator<UserInfo>] = [KeyPathComparator(\UserInfo.displayName)]
+
     private let appState: AppState
 
     init(appState: AppState, preselectedUser: UserInfo? = nil) {
@@ -35,6 +38,11 @@ final class SendViewModel {
             user.logOnName.lowercased().contains(query) ||
             (user.groupName?.lowercased().contains(query) ?? false)
         }
+    }
+
+    /// Users shown in the table — filtered by search, then sorted by the active column order.
+    var displayedUsers: [UserInfo] {
+        filteredUsers.sorted(using: sortOrder)
     }
 
     var groupedUsers: [(String, [UserInfo])] {
@@ -66,6 +74,19 @@ final class SendViewModel {
     func removeAttachment(at index: Int) {
         guard index >= 0, index < attachmentURLs.count else { return }
         attachmentURLs.remove(at: index)
+    }
+
+    /// Re-broadcast presence to refresh the online user list.
+    func refreshUsers() async {
+        await appState.messageService?.refreshUserList()
+    }
+
+    /// Enforce single-recipient selection when multi-user sending is disabled.
+    /// Called from the table's selection onChange with the previous and new selection.
+    func reconcileSelection(previous: Set<UserIdentifier>, current: Set<UserIdentifier>) {
+        guard !SettingsService.shared.allowSendingToMultiUser, current.count > 1 else { return }
+        let added = current.subtracting(previous)
+        selectedUsers = Set((added.isEmpty ? Array(current.prefix(1)) : Array(added.prefix(1))))
     }
 
     func send() async {

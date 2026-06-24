@@ -17,6 +17,12 @@ private func isImageFile(_ url: URL) -> Bool {
     return imageExtensions.contains(url.pathExtension.lowercased())
 }
 
+/// Non-optional accessors so the Group/Version table columns are sortable via KeyPathComparator.
+private extension UserInfo {
+    var groupDisplay: String { groupName ?? "" }
+    var versionDisplay: String { version ?? "" }
+}
+
 struct SendWindow: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel: SendViewModel?
@@ -43,7 +49,7 @@ struct SendWindow: View {
             // Window already visible and a new request arrived — rebuild for new user.
             viewModel = SendViewModel(appState: appState, preselectedUser: appState.composePreselectedUser)
         }
-        .frame(minWidth: 500, minHeight: 450)
+        .frame(minWidth: 620, minHeight: 470)
     }
 }
 
@@ -52,33 +58,107 @@ struct SendWindowContent: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("cmdEnterToSend") private var cmdEnterToSend: Bool = false
     @State private var isTextAreaDropTargeted = false
+    @State private var columnCustomization = TableColumnCustomization<UserInfo>()
 
     var body: some View {
         VStack(spacing: 0) {
-            // User list
-            List(viewModel.filteredUsers, id: \.id) { user in
-                HStack {
-                    if viewModel.selectedUsers.contains(user.id) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.blue)
-                    } else {
-                        Image(systemName: "circle")
-                            .foregroundStyle(.secondary)
+            // Header — search, member count, refresh
+            HStack(spacing: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    TextField("Search users", text: $viewModel.searchText)
+                        .textFieldStyle(.plain)
+                    if !viewModel.searchText.isEmpty {
+                        Button {
+                            viewModel.searchText = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    UserRow(user: user)
                 }
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    viewModel.toggleUser(user)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                .frame(maxWidth: 280)
+
+                Spacer()
+
+                Text("\(viewModel.selectedUsers.count) of \(viewModel.filteredUsers.count) selected")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+
+                Button {
+                    Task { await viewModel.refreshUsers() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
                 }
-                .listRowBackground(
-                    viewModel.selectedUsers.contains(user.id)
-                    ? Color.accentColor.opacity(0.2)
-                    : Color.clear
-                )
+                .help("Refresh user list")
             }
-            .searchable(text: $viewModel.searchText, prompt: "Search users")
-            .frame(minHeight: 150)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            // User table — sortable columns, multi-select; right-click a header to
+            // show/hide/reorder columns (Name/Group/Host/IP/Logon/Version).
+            Table(of: UserInfo.self,
+                  selection: $viewModel.selectedUsers,
+                  sortOrder: $viewModel.sortOrder,
+                  columnCustomization: $columnCustomization) {
+                TableColumn("Name", value: \.displayName) { user in
+                    HStack(spacing: 6) {
+                        Image(systemName: user.inAbsence ? "person.fill.xmark" : "person.fill")
+                            .foregroundStyle(user.inAbsence ? .orange : .blue)
+                        Text(user.displayName).lineLimit(1)
+                        if user.supportsEncrypt {
+                            Image(systemName: "lock.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.green)
+                        }
+                        if user.supportsAttachment {
+                            Image(systemName: "paperclip")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .customizationID("name")
+
+                TableColumn("Group", value: \.groupDisplay) { user in
+                    Text(user.groupDisplay).foregroundStyle(.secondary).lineLimit(1)
+                }
+                .customizationID("group")
+
+                TableColumn("Host", value: \.hostName) { user in
+                    Text(user.hostName).lineLimit(1)
+                }
+                .customizationID("host")
+
+                TableColumn("IP Address", value: \.ipAddress) { user in
+                    Text(user.ipAddress).monospacedDigit().lineLimit(1)
+                }
+                .customizationID("ip")
+
+                TableColumn("Logon", value: \.logOnName) { user in
+                    Text(user.logOnName).lineLimit(1)
+                }
+                .customizationID("logon")
+
+                TableColumn("Version", value: \.versionDisplay) { user in
+                    Text(user.versionDisplay).foregroundStyle(.secondary).lineLimit(1)
+                }
+                .customizationID("version")
+            } rows: {
+                ForEach(viewModel.displayedUsers) { user in
+                    TableRow(user)
+                }
+            }
+            .frame(minHeight: 160)
+            .onChange(of: viewModel.selectedUsers) { old, new in
+                viewModel.reconcileSelection(previous: old, current: new)
+            }
 
             Divider()
 

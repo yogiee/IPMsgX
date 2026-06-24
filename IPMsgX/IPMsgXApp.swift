@@ -104,7 +104,7 @@ struct IPMsgXApp: App {
                 .environment(appState)
                 .task { await bootstrap() }
         }
-        .defaultSize(width: 500, height: 450)
+        .defaultSize(width: 680, height: 560)
         .commands {
             IPMsgCommands(appState: appState)
         }
