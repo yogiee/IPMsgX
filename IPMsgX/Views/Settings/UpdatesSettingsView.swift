@@ -3,22 +3,28 @@
 import SwiftUI
 
 struct UpdatesSettingsView: View {
-    @State private var updater = UpdaterService.shared
+    @State private var schedule = UpdaterService.shared.updateCheckSchedule
 
     var body: some View {
         Form {
             Section("Automatic Updates") {
-                Picker("Update behavior", selection: $updater.updateMode) {
-                    Text("Auto-update (recommended)").tag(0)
-                    Text("Download updates, ask before installing").tag(1)
-                    Text("Disabled").tag(2)
+                Picker("Check for updates", selection: $schedule) {
+                    ForEach(UpdateCheckSchedule.allCases) { option in
+                        Text(option.displayName).tag(option)
+                    }
                 }
                 .pickerStyle(.radioGroup)
+                .onChange(of: schedule) { _, newValue in
+                    UpdaterService.shared.updateCheckSchedule = newValue
+                }
+                Text("Updates are downloaded and verified automatically, then installed on quit.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section {
-                Button("Check for Updates…") {
-                    updater.checkForUpdates()
+                Button("Check for Updates Now…") {
+                    UpdaterService.shared.checkForUpdates()
                 }
             }
         }

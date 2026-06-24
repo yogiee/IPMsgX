@@ -25,7 +25,7 @@ struct SettingsView: View {
 }
 
 enum SettingsCategory: String, CaseIterable, Identifiable {
-    case general, appearance, network, send, receive, absence, refuse, log, updates
+    case general, appearance, network, send, receive, absence, refuse, log, updates, about
 
     var id: String { rawValue }
 
@@ -40,6 +40,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .refuse:     return "Refuse"
         case .log:        return "Log"
         case .updates:    return "Updates"
+        case .about:      return "About"
         }
     }
 
@@ -54,6 +55,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .refuse:     return "hand.raised"
         case .log:        return "doc.text"
         case .updates:    return "arrow.down.circle"
+        case .about:      return "info.circle"
         }
     }
 
@@ -69,6 +71,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .refuse:     RefuseSettingsView()
         case .log:        LogSettingsView()
         case .updates:    UpdatesSettingsView()
+        case .about:      AboutSettingsView()
         }
     }
 }
