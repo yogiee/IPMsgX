@@ -9,6 +9,8 @@ final class SendViewModel {
     var selectedUsers: Set<UserIdentifier> = []
     var messageText: String = ""
     var attachmentURLs: [URL] = []
+    /// Images to send inline (clipboard position) rather than as file attachments.
+    var inlineImageURLs: [URL] = []
     var isSealed: Bool = false
     var isLocked: Bool = false
     var searchText: String = ""
@@ -51,7 +53,7 @@ final class SendViewModel {
     }
 
     var canSend: Bool {
-        !selectedUsers.isEmpty && (!messageText.isEmpty || !attachmentURLs.isEmpty)
+        !selectedUsers.isEmpty && (!messageText.isEmpty || !attachmentURLs.isEmpty || !inlineImageURLs.isEmpty)
     }
 
     func toggleUser(_ user: UserInfo) {
@@ -76,6 +78,37 @@ final class SendViewModel {
         attachmentURLs.remove(at: index)
     }
 
+    func addInlineImage(url: URL) {
+        if !inlineImageURLs.contains(url) {
+            inlineImageURLs.append(url)
+        }
+    }
+
+    func removeInlineImage(at index: Int) {
+        guard index >= 0, index < inlineImageURLs.count else { return }
+        inlineImageURLs.remove(at: index)
+    }
+
+    /// Save pasted clipboard image data to a temp file and queue it as an inline image.
+    func addPastedImage(_ data: Data, fileExtension: String) {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("IPMsgX-send", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent("pasted-\(UUID().uuidString).\(fileExtension)")
+        do {
+            try data.write(to: url)
+            addInlineImage(url: url)
+        } catch {
+            // ignore — paste simply does nothing if the temp write fails
+        }
+    }
+
+    /// Whether a dropped file is an image (used to offer the inline-vs-attachment choice).
+    static func isImageFile(_ url: URL) -> Bool {
+        let imageExts: Set<String> = ["png", "jpg", "jpeg", "gif", "tiff", "tif", "bmp", "heic", "webp"]
+        return imageExts.contains(url.pathExtension.lowercased())
+    }
+
     /// Re-broadcast presence to refresh the online user list.
     func refreshUsers() async {
         await appState.messageService?.refreshUserList()
@@ -91,18 +124,20 @@ final class SendViewModel {
 
     func send() async {
         let users = appState.onlineUsers.filter { selectedUsers.contains($0.id) }
-        guard !users.isEmpty, (!messageText.isEmpty || !attachmentURLs.isEmpty) else { return }
+        guard !users.isEmpty, canSend else { return }
 
         _ = await appState.sendMessage(
             to: users,
             message: messageText,
             isSealed: isSealed,
             isLocked: isLocked,
-            attachments: attachmentURLs
+            attachments: attachmentURLs,
+            inlineImages: inlineImageURLs
         )
 
         // Reset
         messageText = ""
         attachmentURLs = []
+        inlineImageURLs = []
     }
 }

@@ -10,6 +10,7 @@ struct AttachmentTextEditor: NSViewRepresentable {
     var cmdEnterToSend: Bool
     var onEnterSend: () -> Void
     var onFileDrop: ([URL]) -> Void
+    var onPasteImage: ((Data, String) -> Void)? = nil
     var isDropTargeted: Binding<Bool>
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -52,6 +53,7 @@ struct AttachmentTextEditor: NSViewRepresentable {
         }
         context.coordinator.parent = self
         textView.onFileDrop = { urls in onFileDrop(urls) }
+        textView.onPasteImage = onPasteImage
         textView.onIsTargetedChange = { isDropTargeted.wrappedValue = $0 }
     }
 
@@ -91,7 +93,28 @@ struct AttachmentTextEditor: NSViewRepresentable {
 
 private class AttachDropTextView: NSTextView {
     var onFileDrop: (([URL]) -> Void)?
+    var onPasteImage: ((Data, String) -> Void)?
     var onIsTargetedChange: ((Bool) -> Void)?
+
+    /// Intercept paste: if the clipboard holds an image (and not text), route it to the
+    /// inline-image handler instead of inserting it as text.
+    override func paste(_ sender: Any?) {
+        let pb = NSPasteboard.general
+        let hasText = (pb.string(forType: .string)?.isEmpty == false)
+        if !hasText {
+            if let data = pb.data(forType: .png) {
+                onPasteImage?(data, "png")
+                return
+            }
+            if let tiff = pb.data(forType: .tiff),
+               let rep = NSBitmapImageRep(data: tiff),
+               let png = rep.representation(using: .png, properties: [:]) {
+                onPasteImage?(png, "png")
+                return
+            }
+        }
+        super.paste(sender)
+    }
 
     private func hasFileURLs(_ info: NSDraggingInfo) -> Bool {
         info.draggingPasteboard.canReadObject(

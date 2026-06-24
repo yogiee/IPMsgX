@@ -49,7 +49,22 @@ enum PersistenceController {
     @MainActor
     static func saveReceivedMessage(_ msg: ReceivedMessage) {
         let context = sharedModelContainer.mainContext
-        let attachNames = msg.attachments.map(\.fileName).joined(separator: ", ")
+
+        // Inline images are ephemeral — never persist their bytes. Store only a text reference
+        // like <inline-image-gif> in the body. Regular file attachments are listed as names.
+        let inline = msg.attachments.filter { $0.clipboardPosition != nil }
+        let files = msg.attachments.filter { $0.clipboardPosition == nil }
+
+        var body = msg.message
+        if !inline.isEmpty {
+            let placeholders = inline.map { att -> String in
+                let ext = (att.fileName as NSString).pathExtension.lowercased()
+                return ext.isEmpty ? "<inline-image>" : "<inline-image-\(ext)>"
+            }.joined(separator: " ")
+            body = body.isEmpty ? placeholders : body + "\n" + placeholders
+        }
+
+        let attachNames = files.map(\.fileName).joined(separator: ", ")
         let record = MessageRecord(
             packetNo: msg.packetNo,
             direction: .received,
@@ -57,12 +72,12 @@ enum PersistenceController {
             peerUserName: msg.fromUser.displayName,
             peerHostName: msg.fromUser.hostName,
             peerIPAddress: msg.fromUser.ipAddress,
-            messageBody: msg.message,
+            messageBody: body,
             isSealed: msg.isSealed,
             isLocked: msg.isLocked,
             isBroadcast: msg.isBroadcast,
             secureLevel: msg.secureLevel,
-            hasAttachments: msg.hasAttachments,
+            hasAttachments: !files.isEmpty,
             attachmentNames: attachNames.isEmpty ? nil : attachNames
         )
         context.insert(record)
@@ -72,6 +87,18 @@ enum PersistenceController {
     @MainActor
     static func saveSentMessage(_ msg: SentMessage) {
         let context = sharedModelContainer.mainContext
+
+        // Inline images are ephemeral — store only a <inline-image-…> reference in the body.
+        var body = msg.message
+        if !msg.inlineImageURLs.isEmpty {
+            let placeholders = msg.inlineImageURLs.map { url -> String in
+                let ext = url.pathExtension.lowercased()
+                return ext.isEmpty ? "<inline-image>" : "<inline-image-\(ext)>"
+            }.joined(separator: " ")
+            body = body.isEmpty ? placeholders : body + "\n" + placeholders
+        }
+        let attachNames = msg.attachmentURLs.map(\.lastPathComponent).joined(separator: ", ")
+
         for user in msg.toUsers {
             let record = MessageRecord(
                 packetNo: msg.packetNo,
@@ -80,11 +107,11 @@ enum PersistenceController {
                 peerUserName: user.displayName,
                 peerHostName: user.hostName,
                 peerIPAddress: user.ipAddress,
-                messageBody: msg.message,
+                messageBody: body,
                 isSealed: msg.isSealed,
                 isLocked: msg.isLocked,
                 hasAttachments: msg.hasAttachments,
-                attachmentNames: msg.attachmentURLs.map(\.lastPathComponent).joined(separator: ", ")
+                attachmentNames: attachNames.isEmpty ? nil : attachNames
             )
             context.insert(record)
         }

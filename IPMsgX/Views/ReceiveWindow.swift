@@ -22,6 +22,10 @@ struct ReceiveWindow: View {
                 viewModel = ReceiveViewModel(message: message, appState: appState)
             }
         }
+        .onDisappear {
+            // Inline images are one-time — discard the temp files when the window closes.
+            viewModel?.cleanupInlineTemp()
+        }
         .frame(minWidth: 400, minHeight: 300)
     }
 }
@@ -93,20 +97,26 @@ struct ReceiveWindowContent: View {
                 // Message body (with seal overlay)
                 ZStack {
                     ScrollView {
-                        Group {
+                        VStack(alignment: .leading, spacing: 12) {
                             let sanitized = MessageRenderer.sanitize(viewModel.message.message)
-                            if sanitized.isEmpty, !viewModel.message.attachments.isEmpty {
+                            if !sanitized.isEmpty {
+                                Text(MessageRenderer.render(viewModel.message.message))
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            } else if viewModel.inlineImages.isEmpty, viewModel.hasFileAttachments {
                                 Label(
-                                    viewModel.message.attachments.count == 1
-                                        ? "1 attachment" : "\(viewModel.message.attachments.count) attachments",
+                                    viewModel.fileAttachments.count == 1
+                                        ? "1 attachment" : "\(viewModel.fileAttachments.count) attachments",
                                     systemImage: "paperclip"
                                 )
                                 .foregroundStyle(.secondary)
-                            } else {
-                                Text(MessageRenderer.render(viewModel.message.message))
+                            }
+
+                            // Inline images — stacked, animated (GIF), click for Quick Look.
+                            ForEach(viewModel.inlineImages, id: \.fileID) { img in
+                                InlineImageCell(viewModel: viewModel, attachment: img)
                             }
                         }
-                        .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding()
                     }
@@ -118,13 +128,17 @@ struct ReceiveWindowContent: View {
                     }
                 }
                 .frame(maxHeight: .infinity)
+                .task(id: viewModel.isSealOpened) {
+                    // Load inline images once the content is visible (not while sealed).
+                    if viewModel.isSealOpened { await viewModel.loadInlineImages() }
+                }
 
-                // Attachments
-                if viewModel.hasAttachments {
+                // File attachments (inline images are excluded — they show in the body)
+                if viewModel.hasFileAttachments {
                     Divider()
                     ScrollView(.horizontal) {
                         HStack {
-                            ForEach(viewModel.message.attachments, id: \.fileID) { attach in
+                            ForEach(viewModel.fileAttachments, id: \.fileID) { attach in
                                 Button {
                                     viewModel.downloadAttachment(attach)
                                 } label: {
@@ -223,6 +237,42 @@ struct ReceiveWindowContent: View {
         }
         .sheet(isPresented: $viewModel.showPasswordPrompt) {
             PasswordPromptView(viewModel: viewModel)
+        }
+        .sheet(item: $viewModel.quickLookItem) { item in
+            QuickLookSheet(url: item.url)
+        }
+    }
+}
+
+/// One inline image in the message body — animated, tap for Quick Look, right-click to save.
+private struct InlineImageCell: View {
+    @Bindable var viewModel: ReceiveViewModel
+    let attachment: IPMsgAttachmentParser.ParsedAttachment
+
+    var body: some View {
+        if let url = viewModel.inlineImageURLs[attachment.fileID] {
+            let size = viewModel.inlineImageSizes[attachment.fileID] ?? CGSize(width: 200, height: 200)
+            AnimatedImageView(url: url)
+                .frame(width: size.width, height: size.height)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator))
+                .contentShape(Rectangle())
+                .onTapGesture { viewModel.showQuickLook(fileID: attachment.fileID) }
+                .contextMenu {
+                    Button("Quick Look") { viewModel.showQuickLook(fileID: attachment.fileID) }
+                    Button("Save…") { viewModel.saveInline(fileID: attachment.fileID) }
+                }
+                .help("Click for Quick Look · right-click to save")
+        } else if viewModel.inlineLoading.contains(attachment.fileID) {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("Loading image…").font(.caption).foregroundStyle(.secondary)
+            }
+            .frame(height: 48)
+        } else {
+            Label("Couldn’t load \(attachment.fileName)", systemImage: "photo.badge.exclamationmark")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 }

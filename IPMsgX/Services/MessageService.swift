@@ -739,7 +739,7 @@ actor MessageService {
 
     // MARK: - Sending Messages
 
-    func sendMessage(to users: [UserInfo], message: String, isSealed: Bool, isLocked: Bool, attachments: [URL]) async -> Int {
+    func sendMessage(to users: [UserInfo], message: String, isSealed: Bool, isLocked: Bool, attachments: [URL], inlineImages: [URL] = []) async -> Int {
         let packetNo = await PacketNumberGenerator.shared.next()
 
         var command: UInt32 = IPMsgCommand.sendMsg.rawValue | IPMsgOption.sendCheckOpt.rawValue
@@ -753,25 +753,23 @@ actor MessageService {
             }
         }
 
-        // Build attachment option and register with store for TCP serving
+        // Build attachment option and register with store for TCP serving. Regular files use
+        // standard entries; inline images use clipboard entries (with a clipboard position) so
+        // receivers render them inline. Both are served over TCP from the attachment store.
         var attachmentOption: String?
-        if !attachments.isEmpty {
-            var entries: [IPMsgAttachmentBuilder.AttachmentEntry] = []
+        if !attachments.isEmpty || !inlineImages.isEmpty {
             let fm = FileManager.default
             let userIDs = Set(users.map(\.id))
+            var appendix = ""
+
             for url in attachments {
                 guard let attrs = try? fm.attributesOfItem(atPath: url.path) else { continue }
                 let isDir = (attrs[.type] as? FileAttributeType) == .typeDirectory
                 let size = (attrs[.size] as? UInt64) ?? 0
                 let modDate = (attrs[.modificationDate] as? Date) ?? Date()
                 let isHidden = url.lastPathComponent.hasPrefix(".")
-                // Register with store — fileID is assigned by the store
-                let fileID = await attachmentStore.addAttachment(
-                    packetNo: packetNo,
-                    path: url,
-                    users: userIDs
-                )
-                entries.append(IPMsgAttachmentBuilder.AttachmentEntry(
+                let fileID = await attachmentStore.addAttachment(packetNo: packetNo, path: url, users: userIDs)
+                let entry = IPMsgAttachmentBuilder.AttachmentEntry(
                     fileID: fileID,
                     fileName: url.lastPathComponent,
                     fileSize: size,
@@ -781,10 +779,27 @@ actor MessageService {
                     isHidden: isHidden,
                     isExtensionHidden: false,
                     posixPermissions: nil
-                ))
+                )
+                appendix += IPMsgAttachmentBuilder.buildSingleEntry(entry) + "\u{07}"
             }
-            if !entries.isEmpty {
-                attachmentOption = IPMsgAttachmentBuilder.buildAttachmentAppendix(entries: entries)
+
+            // Inline images at a clipboard position (end of the message text).
+            let position = message.utf8.count
+            for url in inlineImages {
+                guard let attrs = try? fm.attributesOfItem(atPath: url.path) else { continue }
+                let size = (attrs[.size] as? UInt64) ?? 0
+                let fileID = await attachmentStore.addAttachment(packetNo: packetNo, path: url, users: userIDs)
+                let clip = IPMsgAttachmentBuilder.buildClipboardEntry(
+                    fileID: fileID,
+                    fileName: url.lastPathComponent,
+                    dataSize: size,
+                    position: position
+                )
+                appendix += clip + "\u{07}"
+            }
+
+            if !appendix.isEmpty {
+                attachmentOption = appendix
                 command |= IPMsgOption.fileAttachOpt.rawValue
             }
         }

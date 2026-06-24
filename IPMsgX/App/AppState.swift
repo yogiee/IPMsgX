@@ -211,14 +211,15 @@ final class AppState {
         }
     }
 
-    func sendMessage(to users: [UserInfo], message: String, isSealed: Bool, isLocked: Bool, attachments: [URL] = []) async -> Int? {
+    func sendMessage(to users: [UserInfo], message: String, isSealed: Bool, isLocked: Bool, attachments: [URL] = [], inlineImages: [URL] = []) async -> Int? {
         guard let service = messageService else { return nil }
         let packetNo = await service.sendMessage(
             to: users,
             message: message,
             isSealed: isSealed,
             isLocked: isLocked,
-            attachments: attachments
+            attachments: attachments,
+            inlineImages: inlineImages
         )
         let sent = SentMessage(
             packetNo: packetNo,
@@ -227,7 +228,8 @@ final class AppState {
             toUsers: users,
             isSealed: isSealed,
             isLocked: isLocked,
-            attachmentURLs: attachments
+            attachmentURLs: attachments,
+            inlineImageURLs: inlineImages
         )
         sentMessages.insert(sent, at: 0)
         PersistenceController.saveSentMessage(sent)

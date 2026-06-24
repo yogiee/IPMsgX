@@ -69,8 +69,35 @@ struct ReceiveSettingsView: View {
                 Toggle("Quote by default when replying", isOn: $settings.quoteCheckDefault)
                 Toggle("Use clickable URLs", isOn: $settings.useClickableURL)
             }
+
+            Section("File Downloads") {
+                LabeledContent("Save to") {
+                    HStack(spacing: 8) {
+                        Text(settings.downloadLocation.path(percentEncoded: false))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .foregroundStyle(.secondary)
+                        Button("Choose…") { chooseDownloadFolder() }
+                    }
+                }
+                Toggle("Always prompt for location", isOn: $settings.alwaysPromptSaveLocation)
+                    .help("When on, a save dialog opens at the folder above for each download. When off, files save straight into that folder.")
+            }
         }
         .formStyle(.grouped)
         .padding()
+    }
+
+    private func chooseDownloadFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = settings.downloadLocation
+        panel.prompt = "Choose"
+        if panel.runModal() == .OK, let url = panel.url {
+            settings.downloadLocation = url
+        }
     }
 }

@@ -12,6 +12,7 @@ struct SentMessage: Identifiable, Sendable {
     let isSealed: Bool
     let isLocked: Bool
     let attachmentURLs: [URL]
+    var inlineImageURLs: [URL] = []
 
     var hasAttachments: Bool {
         !attachmentURLs.isEmpty

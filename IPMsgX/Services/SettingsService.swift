@@ -124,6 +124,27 @@ final class SettingsService: @unchecked Sendable {
         set { defaults.set(newValue, forKey: "quoteCheckDefault") }
     }
 
+    // MARK: - Incoming file downloads
+
+    /// Folder where received files are saved. Defaults to the user's Downloads folder.
+    var downloadLocation: URL {
+        get {
+            if let path = defaults.string(forKey: "downloadLocation"), !path.isEmpty {
+                return URL(fileURLWithPath: path)
+            }
+            return FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+                ?? FileManager.default.homeDirectoryForCurrentUser
+        }
+        set { defaults.set(newValue.path, forKey: "downloadLocation") }
+    }
+
+    /// When true, downloading shows a save dialog (opened at `downloadLocation`); when false,
+    /// files are saved straight into `downloadLocation` without prompting.
+    var alwaysPromptSaveLocation: Bool {
+        get { defaults.object(forKey: "alwaysPromptSaveLocation") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "alwaysPromptSaveLocation") }
+    }
+
     /// When true, show macOS notification banner instead of opening receive window
     var useNotificationBanner: Bool {
         get { defaults.object(forKey: "useNotificationBanner") as? Bool ?? false }

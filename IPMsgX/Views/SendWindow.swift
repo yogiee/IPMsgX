@@ -57,6 +57,20 @@ struct SendWindowContent: View {
     @AppStorage("cmdEnterToSend") private var cmdEnterToSend: Bool = false
     @State private var isTextAreaDropTargeted = false
     @State private var columnCustomization = TableColumnCustomization<UserInfo>()
+    @State private var droppedImages: [URL] = []
+    @State private var showDropChoice = false
+
+    /// Route dropped files: images offer an inline-vs-attachment choice; everything else attaches.
+    private func handleDrop(_ urls: [URL]) {
+        let images = urls.filter { SendViewModel.isImageFile($0) }
+        for url in urls where !SendViewModel.isImageFile(url) {
+            viewModel.addAttachment(url: url)
+        }
+        if !images.isEmpty {
+            droppedImages = images
+            showDropChoice = true
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -209,9 +223,8 @@ struct SendWindowContent: View {
                             Task { await viewModel.send(); dismiss() }
                         }
                     },
-                    onFileDrop: { urls in
-                        for url in urls { viewModel.addAttachment(url: url) }
-                    },
+                    onFileDrop: { urls in handleDrop(urls) },
+                    onPasteImage: { data, ext in viewModel.addPastedImage(data, fileExtension: ext) },
                     isDropTargeted: $isTextAreaDropTargeted
                 )
                 .frame(minHeight: 100)
@@ -232,35 +245,19 @@ struct SendWindowContent: View {
                     }
                 }
 
-                // Attachments
-                if !viewModel.attachmentURLs.isEmpty {
+                // Attachments and inline images
+                if !viewModel.attachmentURLs.isEmpty || !viewModel.inlineImageURLs.isEmpty {
                     ScrollView(.horizontal) {
                         HStack {
                             ForEach(Array(viewModel.attachmentURLs.enumerated()), id: \.offset) { idx, url in
-                                HStack(spacing: 4) {
-                                    if isImageFile(url), let nsImage = NSImage(contentsOf: url) {
-                                        Image(nsImage: nsImage)
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fill)
-                                            .frame(width: 24, height: 24)
-                                            .clipShape(RoundedRectangle(cornerRadius: 4))
-                                    } else {
-                                        Image(systemName: "doc")
-                                    }
-                                    Text(url.lastPathComponent)
-                                        .lineLimit(1)
-                                    Button {
-                                        viewModel.removeAttachment(at: idx)
-                                    } label: {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    .buttonStyle(.plain)
+                                AttachmentChip(url: url, isInline: false) {
+                                    viewModel.removeAttachment(at: idx)
                                 }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(.fill.tertiary, in: Capsule())
-                                .font(.caption)
+                            }
+                            ForEach(Array(viewModel.inlineImageURLs.enumerated()), id: \.offset) { idx, url in
+                                AttachmentChip(url: url, isInline: true) {
+                                    viewModel.removeInlineImage(at: idx)
+                                }
                             }
                         }
                     }
@@ -311,10 +308,62 @@ struct SendWindowContent: View {
         }
         .navigationTitle("New Message")
         .dropDestination(for: URL.self) { urls, _ in
-            for url in urls {
-                viewModel.addAttachment(url: url)
-            }
+            handleDrop(urls)
             return true
         }
+        .confirmationDialog(
+            droppedImages.count == 1 ? "Add this image" : "Add \(droppedImages.count) images",
+            isPresented: $showDropChoice,
+            titleVisibility: .visible
+        ) {
+            Button("Send Inline") {
+                for url in droppedImages { viewModel.addInlineImage(url: url) }
+                droppedImages = []
+            }
+            Button("Add as Attachment") {
+                for url in droppedImages { viewModel.addAttachment(url: url) }
+                droppedImages = []
+            }
+            Button("Cancel", role: .cancel) { droppedImages = [] }
+        } message: {
+            Text("Send inline to show the image in the message, or add it as a downloadable file attachment.")
+        }
+    }
+}
+
+/// A chip for a queued attachment or inline image, with a remove button.
+private struct AttachmentChip: View {
+    let url: URL
+    let isInline: Bool
+    let onRemove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if isImageFile(url), let nsImage = NSImage(contentsOf: url) {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 24, height: 24)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+            } else {
+                Image(systemName: "doc")
+            }
+            Text(isInline ? "inline image" : url.lastPathComponent)
+                .lineLimit(1)
+            if isInline {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .foregroundStyle(.blue)
+                    .help("Sent inline")
+            }
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(.fill.tertiary, in: Capsule())
+        .font(.caption)
     }
 }

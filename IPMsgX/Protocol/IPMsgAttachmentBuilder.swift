@@ -65,9 +65,9 @@ enum IPMsgAttachmentBuilder {
         return result
     }
 
-    static func buildClipboardEntry(fileID: Int, dataSize: UInt64, position: Int) -> String {
+    static func buildClipboardEntry(fileID: Int, fileName: String = "clipboard", dataSize: UInt64, position: Int) -> String {
         let fileAttr = IPMsgFileType.clipboard.rawValue
         let extAttr = String(format: "%X=%X", IPMsgFileExtAttr.clipboardPos.rawValue, position)
-        return String(format: "%d:clipboard:%llX:0:%X:%@:", fileID, dataSize, fileAttr, extAttr)
+        return String(format: "%d:%@:%llX:0:%X:%@:", fileID, fileName, dataSize, fileAttr, extAttr)
     }
 }
