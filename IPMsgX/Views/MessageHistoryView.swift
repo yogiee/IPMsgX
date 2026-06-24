@@ -6,6 +6,7 @@ import SwiftData
 
 struct MessageHistoryView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(AppState.self) private var appState
     @State private var viewModel = MessageHistoryViewModel()
 
     @Query(sort: \MessageRecord.date, order: .reverse)
@@ -32,8 +33,18 @@ struct MessageHistoryView: View {
                 )
             }
         }
-        .navigationTitle("Message History")
+        .searchable(text: $viewModel.searchText, placement: .sidebar, prompt: "Search all messages")
+        .navigationTitle("History")
         .frame(minWidth: 600, minHeight: 400)
+        .onAppear { selectPendingPeer() }
+        .onChange(of: appState.historyPeerToSelect) { selectPendingPeer() }
+    }
+
+    /// Focus a conversation requested from outside (e.g. a cold-launch notification tap).
+    private func selectPendingPeer() {
+        guard let peer = appState.historyPeerToSelect else { return }
+        viewModel.selectedPeer = peer
+        appState.historyPeerToSelect = nil
     }
 }
 
@@ -113,18 +124,16 @@ private struct HistoryThreadView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Filter bar
+            // Filter bar — direction filter only; text search lives in the sidebar
             HStack(spacing: 10) {
-                HStack(spacing: 4) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.tertiary)
+                if !viewModel.searchText.isEmpty {
+                    Label("Filtering by “\(viewModel.searchText)”", systemImage: "magnifyingglass")
                         .font(.caption)
-                    TextField("Search in conversation...", text: $viewModel.searchText)
-                        .textFieldStyle(.plain)
-                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
-                .padding(6)
-                .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 6))
+
+                Spacer()
 
                 Picker("", selection: $viewModel.filterDirection) {
                     Text("All").tag(MessageDirection?.none)

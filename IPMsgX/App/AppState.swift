@@ -44,6 +44,10 @@ final class AppState {
         receivedMessages.filter { !$0.isAbsenceReply && !readPacketNos.contains($0.packetNo) }
     }
 
+    /// Peer name the History window should focus on next appear. Set when a notification is
+    /// tapped for a message no longer in memory (e.g. a cold launch) so we can route to History.
+    var historyPeerToSelect: String?
+
     func isSealOpened(packetNo: Int) -> Bool {
         openedSealPacketNos.contains(packetNo)
     }

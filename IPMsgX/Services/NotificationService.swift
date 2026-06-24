@@ -48,7 +48,7 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         content.title = msg.fromUser.displayName
         content.body = msg.isSealed ? "Sealed message" : String(msg.message.prefix(200))
         content.sound = .default
-        content.userInfo = ["packetNo": msg.packetNo]
+        content.userInfo = ["packetNo": msg.packetNo, "senderName": msg.fromUser.displayName]
 
         let request = UNNotificationRequest(
             identifier: "msg-\(msg.packetNo)",
@@ -123,13 +123,16 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
     ) async {
         let userInfo = response.notification.request.content.userInfo
         guard let packetNo = userInfo["packetNo"] as? Int else { return }
+        let senderName = userInfo["senderName"] as? String
 
         await MainActor.run {
             NSApp.activate(ignoringOtherApps: true)
+            var info: [String: Any] = ["packetNo": packetNo]
+            if let senderName { info["senderName"] = senderName }
             NotificationCenter.default.post(
                 name: .showReceivedMessage,
                 object: nil,
-                userInfo: ["packetNo": packetNo]
+                userInfo: info
             )
         }
     }

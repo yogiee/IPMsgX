@@ -13,11 +13,26 @@ final class MessageHistoryViewModel {
     var filterEndDate: Date?
     var selectedPeer: String?
 
-    /// Build conversation list from all messages, grouped by peer
+    /// Build conversation list from all messages, grouped by peer. When searching, only peers
+    /// with a matching message (or matching name) are shown — the full conversation is retained
+    /// so previews/counts stay meaningful and the thread view narrows to matches.
     func conversations(from messages: [MessageRecord]) -> [ConversationInfo] {
         var map: [String: ConversationInfo] = [:]
 
-        for record in messages {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let source: [MessageRecord]
+        if query.isEmpty {
+            source = messages
+        } else {
+            let matchingPeers = Set(
+                messages
+                    .filter { $0.messageBody.localizedStandardContains(query) || $0.peerUserName.localizedStandardContains(query) }
+                    .map(\.peerUserName)
+            )
+            source = messages.filter { matchingPeers.contains($0.peerUserName) }
+        }
+
+        for record in source {
             let key = record.peerUserName
             if var conv = map[key] {
                 conv.messageCount += 1

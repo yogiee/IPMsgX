@@ -119,7 +119,14 @@ struct MenuBarView: View {
         // so the message window becomes key rather than a previously-key Send window.
         .onReceive(NotificationCenter.default.publisher(for: .showReceivedMessage)) { notification in
             guard let packetNo = notification.userInfo?["packetNo"] as? Int else { return }
-            openWindow(id: "receive", value: packetNo)
+            if appState.receivedMessages.contains(where: { $0.packetNo == packetNo }) {
+                // In memory — open the message in its own window.
+                openWindow(id: "receive", value: packetNo)
+            } else {
+                // Not in memory (cold launch / culled) — open History focused on the sender.
+                appState.historyPeerToSelect = notification.userInfo?["senderName"] as? String
+                openWindow(id: "main")
+            }
             NSApp.activate(ignoringOtherApps: true)
         }
         // Open the Send window from anywhere (menu "New Message", dock reopen, sidebar, etc.).

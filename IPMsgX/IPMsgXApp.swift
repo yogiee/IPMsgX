@@ -100,15 +100,15 @@ struct IPMsgXApp: App {
             IPMsgCommands(appState: appState)
         }
 
-        // History window — sidebar + per-user conversation threads. This was the old "main"
-        // window, now demoted from primary interface to a history/browsing surface.
+        // History window — persisted conversations (SwiftData/SQLite) grouped by peer, with
+        // search and per-conversation chat threads. Survives quit/relaunch.
         Window("History", id: "main") {
-            MainWindow()
+            MessageHistoryView()
                 .environment(appState)
                 .modelContainer(PersistenceController.sharedModelContainer)
                 .task { await bootstrap() }
         }
-        .defaultSize(width: 800, height: 600)
+        .defaultSize(width: 820, height: 600)
         .keyboardShortcut("h", modifiers: [.command, .shift])
 
         // Receive windows — one per message, keyed by packet number. Opening multiple distinct
