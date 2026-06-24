@@ -4,6 +4,7 @@ import SwiftUI
 
 struct NetworkSettingsView: View {
     @State private var settings = SettingsService.shared
+    @State private var broadcastAddresses: [String] = SettingsService.shared.broadcastAddresses
     @State private var newBroadcastAddress = ""
     @State private var showKeyResetConfirm = false
     @State private var keyResetDone = false
@@ -51,28 +52,34 @@ struct NetworkSettingsView: View {
             }
 
             Section("Broadcast Addresses") {
-                List {
-                    ForEach(settings.broadcastAddresses, id: \.self) { addr in
-                        Text(addr)
-                    }
-                    .onDelete { indices in
-                        var addrs = settings.broadcastAddresses
-                        addrs.remove(atOffsets: indices)
-                        settings.broadcastAddresses = addrs
+                if broadcastAddresses.isEmpty {
+                    Text("No custom broadcast addresses.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(Array(broadcastAddresses.enumerated()), id: \.offset) { idx, addr in
+                        HStack {
+                            Text(addr)
+                            Spacer()
+                            Button {
+                                broadcastAddresses.remove(at: idx)
+                                settings.broadcastAddresses = broadcastAddresses
+                            } label: {
+                                Image(systemName: "minus.circle.fill")
+                                    .foregroundStyle(.red)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Remove")
+                        }
                     }
                 }
-                .frame(height: 100)
 
                 HStack {
                     TextField("IP Address", text: $newBroadcastAddress)
                         .textFieldStyle(.roundedBorder)
-                    Button("Add") {
-                        guard !newBroadcastAddress.isEmpty else { return }
-                        var addrs = settings.broadcastAddresses
-                        addrs.append(newBroadcastAddress)
-                        settings.broadcastAddresses = addrs
-                        newBroadcastAddress = ""
-                    }
+                        .onSubmit { addBroadcast() }
+                    Button("Add") { addBroadcast() }
+                        .disabled(newBroadcastAddress.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
 
@@ -82,6 +89,14 @@ struct NetworkSettingsView: View {
         }
         .formStyle(.grouped)
         .padding()
+    }
+
+    private func addBroadcast() {
+        let addr = newBroadcastAddress.trimmingCharacters(in: .whitespaces)
+        guard !addr.isEmpty, !broadcastAddresses.contains(addr) else { return }
+        broadcastAddresses.append(addr)
+        settings.broadcastAddresses = broadcastAddresses
+        newBroadcastAddress = ""
     }
 
     private func resetEncryptionKeys() {

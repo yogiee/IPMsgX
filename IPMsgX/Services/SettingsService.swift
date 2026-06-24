@@ -26,6 +26,31 @@ final class SettingsService: @unchecked Sendable {
         set { defaults.set(newValue, forKey: "password") }
     }
 
+    // MARK: - Appearance
+
+    /// App color mode: "system" | "light" | "dark".
+    var appColorMode: String {
+        get { defaults.string(forKey: "appColorMode") ?? "system" }
+        set { defaults.set(newValue, forKey: "appColorMode") }
+    }
+
+    /// Message font family name. Empty = system font. Applies to compose + received content.
+    var messageFontName: String {
+        get { defaults.string(forKey: "messageFontName") ?? "" }
+        set { defaults.set(newValue, forKey: "messageFontName") }
+    }
+
+    var messageFontSize: Double {
+        get { let v = defaults.double(forKey: "messageFontSize"); return v == 0 ? 13 : v }
+        set { defaults.set(newValue, forKey: "messageFontSize") }
+    }
+
+    /// Line height as a multiple of the font size (1.0 = single).
+    var messageLineHeight: Double {
+        get { let v = defaults.double(forKey: "messageLineHeight"); return v == 0 ? 1.2 : v }
+        set { defaults.set(newValue, forKey: "messageLineHeight") }
+    }
+
     var useStatusBar: Bool {
         get { defaults.object(forKey: "useStatusBar") as? Bool ?? true }
         set { defaults.set(newValue, forKey: "useStatusBar") }

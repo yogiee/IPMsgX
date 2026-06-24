@@ -38,8 +38,10 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func postIncomingMessage(_ msg: ReceivedMessage) {
-        // Always play a sound
-        NSSound(named: "Ping")?.play()
+        // Play the user-selected arrival sound ("None" = silent). We play it ourselves and
+        // suppress the banner's own sound below, so there's no double chime.
+        let soundName = SettingsService.shared.receiveSoundName
+        if !soundName.isEmpty { NSSound(named: soundName)?.play() }
 
         // Post banner only if UNUserNotificationCenter is available
         guard let center else { return }
@@ -47,7 +49,7 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         let content = UNMutableNotificationContent()
         content.title = msg.fromUser.displayName
         content.body = msg.isSealed ? "Sealed message" : String(msg.message.prefix(200))
-        content.sound = .default
+        content.sound = nil
         content.userInfo = ["packetNo": msg.packetNo, "senderName": msg.fromUser.displayName]
 
         let request = UNNotificationRequest(

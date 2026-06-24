@@ -141,6 +141,7 @@ struct IPMsgXApp: App {
         appDelegate.appState = appState
         await appState.bootstrap()
         AppIcon.apply(absent: appState.isAbsent)
+        AppearanceManager.apply()
     }
 }
 

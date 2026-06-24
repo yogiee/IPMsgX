@@ -18,23 +18,32 @@ struct RefuseSettingsView: View {
     var body: some View {
         Form {
             Section("Block Conditions") {
-                List {
-                    ForEach(conditions) { cond in
+                if conditions.isEmpty {
+                    Text("No block conditions.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(Array(conditions.enumerated()), id: \.element.id) { idx, cond in
                         HStack {
                             Text(cond.target.rawValue)
-                                .frame(width: 80, alignment: .leading)
+                                .frame(width: 90, alignment: .leading)
                             Text(cond.condition.rawValue)
-                                .frame(width: 80, alignment: .leading)
+                                .frame(width: 90, alignment: .leading)
                             Text(cond.string)
+                            Spacer()
+                            Button {
+                                conditions.remove(at: idx)
+                                save()
+                            } label: {
+                                Image(systemName: "minus.circle.fill")
+                                    .foregroundStyle(.red)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Remove")
                         }
                         .font(.caption)
                     }
-                    .onDelete { indices in
-                        conditions.remove(atOffsets: indices)
-                        save()
-                    }
                 }
-                .frame(height: 120)
             }
 
             Section("Add Condition") {

@@ -20,26 +20,14 @@ actor LogService {
 
     func logReceivedMessage(_ msg: ReceivedMessage) {
         let settings = SettingsService.shared
-        let entry = formatReceived(msg)
-
-        if settings.standardLogEnabled {
-            append(entry, toFile: settings.standardLogFile)
-        }
-        if settings.alternateLogEnabled {
-            append(entry, toFile: settings.alternateLogFile)
-        }
+        guard settings.standardLogEnabled else { return }
+        append(formatReceived(msg), toFile: settings.standardLogFile)
     }
 
     func logSentMessage(_ msg: SentMessage) {
         let settings = SettingsService.shared
-        let entry = formatSent(msg)
-
-        if settings.standardLogEnabled {
-            append(entry, toFile: settings.standardLogFile)
-        }
-        if settings.alternateLogEnabled {
-            append(entry, toFile: settings.alternateLogFile)
-        }
+        guard settings.standardLogEnabled else { return }
+        append(formatSent(msg), toFile: settings.standardLogFile)
     }
 
     // MARK: - Formatting (matches original IP Messenger log format)

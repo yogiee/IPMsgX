@@ -26,7 +26,7 @@ struct AttachmentTextEditor: NSViewRepresentable {
         textView.textContainer?.widthTracksTextView = true
         textView.textContainerInset = NSSize(width: 4, height: 4)
         textView.isRichText = false
-        textView.font = .systemFont(ofSize: NSFont.systemFontSize)
+        applyTypography(to: textView)
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.allowsUndo = true
@@ -43,8 +43,26 @@ struct AttachmentTextEditor: NSViewRepresentable {
         return scrollView
     }
 
+    private func applyTypography(to textView: NSTextView) {
+        let settings = SettingsService.shared
+        let font = settings.messageNSFont
+        textView.font = font
+        // Use the dynamic label color so text stays legible in both light and dark mode.
+        textView.textColor = .labelColor
+        textView.insertionPointColor = .labelColor
+        let style = NSMutableParagraphStyle()
+        style.lineHeightMultiple = CGFloat(settings.messageLineHeight)
+        textView.defaultParagraphStyle = style
+        textView.typingAttributes = [
+            .font: font,
+            .paragraphStyle: style,
+            .foregroundColor: NSColor.labelColor
+        ]
+    }
+
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? AttachDropTextView else { return }
+        applyTypography(to: textView)
         if textView.string != text {
             let sel = textView.selectedRange()
             textView.string = text

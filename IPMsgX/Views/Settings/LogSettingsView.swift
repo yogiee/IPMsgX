@@ -7,20 +7,17 @@ struct LogSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Standard Log") {
-                Toggle("Enable standard log", isOn: $settings.standardLogEnabled)
+            Section {
+                Toggle("Enable message log", isOn: $settings.standardLogEnabled)
                 Toggle("Log sealed messages on open", isOn: $settings.logChainedWhenOpen)
                     .disabled(!settings.standardLogEnabled)
                 TextField("Log file", text: $settings.standardLogFile)
                     .textFieldStyle(.roundedBorder)
                     .disabled(!settings.standardLogEnabled)
-            }
-
-            Section("Important Log") {
-                Toggle("Enable important log", isOn: $settings.alternateLogEnabled)
-                TextField("Log file", text: $settings.alternateLogFile)
-                    .textFieldStyle(.roundedBorder)
-                    .disabled(!settings.alternateLogEnabled)
+            } header: {
+                Text("Message Log")
+            } footer: {
+                Text("Appends every sent and received message to a plain-text log file.")
             }
         }
         .formStyle(.grouped)
@@ -53,6 +50,16 @@ struct SendSettingsView: View {
 
 struct ReceiveSettingsView: View {
     @State private var settings = SettingsService.shared
+    @AppStorage("receiveSoundName") private var receiveSoundName = "Submarine"
+
+    private let systemSounds: [String] = {
+        let dir = "/System/Library/Sounds"
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: dir)) ?? []
+        return names
+            .filter { $0.hasSuffix(".aiff") }
+            .map { ($0 as NSString).deletingPathExtension }
+            .sorted()
+    }()
 
     var body: some View {
         Form {
@@ -64,8 +71,15 @@ struct ReceiveSettingsView: View {
             }
 
             Section("Receive") {
-                TextField("Sound", text: $settings.receiveSoundName)
-                    .textFieldStyle(.roundedBorder)
+                Picker("Sound", selection: $receiveSoundName) {
+                    Text("None").tag("")
+                    ForEach(systemSounds, id: \.self) { name in
+                        Text(name).tag(name)
+                    }
+                }
+                .onChange(of: receiveSoundName) {
+                    if !receiveSoundName.isEmpty { NSSound(named: receiveSoundName)?.play() }
+                }
                 Toggle("Quote by default when replying", isOn: $settings.quoteCheckDefault)
                 Toggle("Use clickable URLs", isOn: $settings.useClickableURL)
             }
