@@ -218,19 +218,14 @@ private struct MenuBarLabel: View {
     @ViewBuilder
     private var menuBarImage: some View {
         if isAbsent {
-            // Away state — distinct orange moon, mirroring the Dock's absence tint.
-            Image(systemName: "moon.fill")
+            // Away state — distinct orange, mirroring the Dock's absence tint.
+            Image(systemName: "exclamationmark.bubble.circle.fill")
                 .foregroundStyle(.orange)
         } else if badge > 0 || showFilled {
-            Image(systemName: showFilled ? "message.fill" : "message")
+            // Unread — flash between filled and outline on arrival, then settle on filled.
+            Image(systemName: showFilled ? "bubble.circle.fill" : "bubble.left.circle")
         } else {
-            if let img = Bundle.appResources.image(forResource: "MenuBarIcon") {
-                Image(nsImage: img)
-            } else if let img = NSImage(named: "MenuBarIcon") {
-                Image(nsImage: img)
-            } else {
-                Image(systemName: "message.fill")
-            }
+            Image(systemName: "bubble.left.and.text.bubble.right.fill")
         }
     }
 
