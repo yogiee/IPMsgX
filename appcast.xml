@@ -18,6 +18,22 @@
         <language>en</language>
 
         <item>
+            <title>Version 1.5.0</title>
+            <sparkle:releaseNotesLink>
+                https://github.com/yogiee/IPMsgX/releases/tag/v1.5.0
+            </sparkle:releaseNotesLink>
+            <pubDate>Wed, 24 Jun 2026 15:00:00 +0000</pubDate>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure
+                url="https://github.com/yogiee/IPMsgX/releases/download/v1.5.0/IPMsgX.dmg"
+                sparkle:version="11"
+                sparkle:shortVersionString="1.5.0"
+                sparkle:edSignature="IePr2IyczIoFY/GlsMBrpbexYRLw0FNyPO3vBHi8WFOTAFQggWd1bdJtx8aMPycztgAY8snCJ9n4FFEp4PZ6AA=="
+                length="3371019"
+                type="application/octet-stream" />
+        </item>
+
+        <item>
             <title>Version 1.4.2</title>
             <sparkle:releaseNotesLink>
                 https://github.com/yogiee/IPMsgX/releases/tag/v1.4.2

@@ -10,8 +10,8 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 BUILD_DIR="$PROJECT_DIR/build"
 APP_NAME="IPMsgX"
 BUNDLE_ID="com.ipmsgx.app"
-VERSION="1.4.2"
-BUILD_NUMBER="10"
+VERSION="1.5.0"
+BUILD_NUMBER="11"
 # EdDSA public key for Sparkle update verification.
 # Generated with: .build/artifacts/sparkle/Sparkle/bin/generate_keys
 # Private key is stored in Keychain. Do NOT change this key without re-signing all releases.
