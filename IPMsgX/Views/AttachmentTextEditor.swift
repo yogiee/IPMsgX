@@ -43,32 +43,52 @@ struct AttachmentTextEditor: NSViewRepresentable {
         return scrollView
     }
 
-    private func applyTypography(to textView: NSTextView) {
+    private func applyTypography(to textView: AttachDropTextView) {
         let settings = SettingsService.shared
         let font = settings.messageNSFont
         textView.font = font
         // Use the dynamic label color so text stays legible in both light and dark mode.
         textView.textColor = .labelColor
         textView.insertionPointColor = .labelColor
+        textView.caretHeight = font.capHeight - font.descender
+
+        // A line height above the font's natural height places all the extra
+        // space ABOVE the glyphs (text sits at the bottom of the cell). Raise
+        // the baseline by half the extra space to center the glyphs.
+        let naturalLH = NSLayoutManager().defaultLineHeight(for: font)
+        let lh = ceil(naturalLH * CGFloat(settings.messageLineHeight))
+        // Divisor below the geometric 2 raises the glyphs slightly above true
+        // center — user-tuned against the clamped caret; don't "correct" it.
+        let baselineOffset = (lh - naturalLH) / 1.5
         let style = NSMutableParagraphStyle()
-        style.lineHeightMultiple = CGFloat(settings.messageLineHeight)
+        style.minimumLineHeight = lh
+        style.maximumLineHeight = lh
         textView.defaultParagraphStyle = style
-        textView.typingAttributes = [
+
+        let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .paragraphStyle: style,
-            .foregroundColor: NSColor.labelColor
+            .foregroundColor: NSColor.labelColor,
+            .baselineOffset: baselineOffset
         ]
+        textView.typingAttributes = attributes
+        if let storage = textView.textStorage, storage.length > 0 {
+            storage.beginEditing()
+            storage.addAttributes(attributes, range: NSRange(location: 0, length: storage.length))
+            storage.endEditing()
+        }
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? AttachDropTextView else { return }
-        applyTypography(to: textView)
         if textView.string != text {
             let sel = textView.selectedRange()
             textView.string = text
             let len = (text as NSString).length
             textView.setSelectedRange(NSRange(location: min(sel.location, len), length: 0))
         }
+        // After the string update so programmatically-set text is restyled too.
+        applyTypography(to: textView)
         context.coordinator.parent = self
         textView.onFileDrop = { urls in onFileDrop(urls) }
         textView.onPasteImage = onPasteImage
@@ -113,6 +133,45 @@ private class AttachDropTextView: NSTextView {
     var onFileDrop: (([URL]) -> Void)?
     var onPasteImage: ((Data, String) -> Void)?
     var onIsTargetedChange: ((Bool) -> Void)?
+
+    /// Caret height, set by applyTypography. AppKit sizes the insertion
+    /// indicator to the full line fragment (line height × multiple); the clamp
+    /// shrinks it to visual text height (cap→descender), centered vertically
+    /// in the fragment and nudged 1pt right so it doesn't touch glyph ink.
+    var caretHeight: CGFloat = 0
+
+    // Since macOS 14 the caret is an AppKit-managed NSTextInsertionIndicator
+    // subview with no size API (drawInsertionPoint is no longer called), so we
+    // re-clamp its frame whenever AppKit positions it.
+    private var caretObservations: [ObjectIdentifier: NSKeyValueObservation] = [:]
+    private var isClampingCaret = false
+
+    override func didAddSubview(_ subview: NSView) {
+        super.didAddSubview(subview)
+        guard subview is NSTextInsertionIndicator else { return }
+        caretObservations[ObjectIdentifier(subview)] = subview.observe(\.frame) { [weak self] indicator, _ in
+            MainActor.assumeIsolated {
+                self?.clampCaret(indicator)
+            }
+        }
+        clampCaret(subview)
+    }
+
+    override func willRemoveSubview(_ subview: NSView) {
+        caretObservations.removeValue(forKey: ObjectIdentifier(subview))
+        super.willRemoveSubview(subview)
+    }
+
+    private func clampCaret(_ indicator: NSView) {
+        guard !isClampingCaret, caretHeight > 0 else { return }
+        let f = indicator.frame
+        guard f.height > caretHeight + 0.5 else { return }
+        isClampingCaret = true
+        indicator.frame = NSRect(x: f.minX + 1,
+                                 y: f.minY + (f.height - caretHeight) / 2,
+                                 width: f.width, height: caretHeight)
+        isClampingCaret = false
+    }
 
     /// Intercept paste: if the clipboard holds an image (and not text), route it to the
     /// inline-image handler instead of inserting it as text.
