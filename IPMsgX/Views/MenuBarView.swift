@@ -113,39 +113,6 @@ struct MenuBarView: View {
             .padding(.vertical, 4)
         }
         .frame(width: 220)
-        // Open a dedicated window for a message — fired both on auto-popup arrival and on a
-        // notification-banner tap. One window per packet; macOS cascades multiple windows, and
-        // re-opening the same packet just brings its window forward. Open first, then activate,
-        // so the message window becomes key rather than a previously-key Send window.
-        .onReceive(NotificationCenter.default.publisher(for: .showReceivedMessage)) { notification in
-            guard let packetNo = notification.userInfo?["packetNo"] as? Int else { return }
-            if appState.receivedMessages.contains(where: { $0.packetNo == packetNo }) {
-                // In memory — open the message in its own window.
-                openWindow(id: "receive", value: packetNo)
-            } else {
-                // Not in memory (cold launch / culled) — open History focused on the sender.
-                appState.historyPeerToSelect = notification.userInfo?["senderName"] as? String
-                openWindow(id: "main")
-            }
-            NSApp.activate(ignoringOtherApps: true)
-        }
-        // Open the Send window from anywhere (menu "New Message", dock reopen, sidebar, etc.).
-        // Hosted here because MenuBarView is always present, even when no window is open.
-        .onReceive(NotificationCenter.default.publisher(for: .openNewSendWindow)) { _ in
-            appState.requestCompose(user: nil)
-            NSApp.activate(ignoringOtherApps: true)
-            openWindow(id: "compose")
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .openSendWindowToUser)) { notification in
-            guard let user = notification.userInfo?["user"] as? UserInfo else { return }
-            appState.requestCompose(user: user)
-            NSApp.activate(ignoringOtherApps: true)
-            openWindow(id: "compose")
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .openHistoryWindow)) { _ in
-            openWindow(id: "main")
-            NSApp.activate(ignoringOtherApps: true)
-        }
     }
 
     // MARK: - Actions
@@ -164,6 +131,53 @@ struct MenuBarView: View {
             return SettingsService.shared.absenceTitle(at: idx) ?? "Absent"
         }
         return "Set Absence"
+    }
+}
+
+// MARK: - Window routing
+
+/// App-wide window-opening observers (incoming-message popups, notification taps, New Message,
+/// History). Attached to the menu bar *label*, which exists from launch: the `.window`-style
+/// MenuBarExtra builds its panel content (MenuBarView) lazily on first open, so observers hosted
+/// there silently missed every event until the user had clicked the menu bar icon once.
+struct WindowRoutingObservers: ViewModifier {
+    let appState: AppState
+    @Environment(\.openWindow) private var openWindow
+
+    func body(content: Content) -> some View {
+        content
+            // Open a dedicated window for a message — fired both on auto-popup arrival and on a
+            // notification-banner tap. One window per packet; macOS cascades multiple windows, and
+            // re-opening the same packet just brings its window forward. Open first, then activate,
+            // so the message window becomes key rather than a previously-key Send window.
+            .onReceive(NotificationCenter.default.publisher(for: .showReceivedMessage)) { notification in
+                guard let packetNo = notification.userInfo?["packetNo"] as? Int else { return }
+                if appState.receivedMessages.contains(where: { $0.packetNo == packetNo }) {
+                    // In memory — open the message in its own window.
+                    openWindow(id: "receive", value: packetNo)
+                } else {
+                    // Not in memory (cold launch / culled) — open History focused on the sender.
+                    appState.historyPeerToSelect = notification.userInfo?["senderName"] as? String
+                    openWindow(id: "main")
+                }
+                NSApp.activate(ignoringOtherApps: true)
+            }
+            // Open the Send window from anywhere (menu "New Message", dock reopen, sidebar, etc.).
+            .onReceive(NotificationCenter.default.publisher(for: .openNewSendWindow)) { _ in
+                appState.requestCompose(user: nil)
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: "compose")
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openSendWindowToUser)) { notification in
+                guard let user = notification.userInfo?["user"] as? UserInfo else { return }
+                appState.requestCompose(user: user)
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: "compose")
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openHistoryWindow)) { _ in
+                openWindow(id: "main")
+                NSApp.activate(ignoringOtherApps: true)
+            }
     }
 }
 

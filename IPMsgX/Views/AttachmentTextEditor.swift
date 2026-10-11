@@ -12,6 +12,9 @@ struct AttachmentTextEditor: NSViewRepresentable {
     var onFileDrop: ([URL]) -> Void
     var onPasteImage: ((Data, String) -> Void)? = nil
     var isDropTargeted: Binding<Bool>
+    /// Extra scrollable space above/below the text so content can scroll beneath floating overlays.
+    var topContentInset: CGFloat = 0
+    var bottomContentInset: CGFloat = 0
 
     func makeNSView(context: Context) -> NSScrollView {
         let textView = AttachDropTextView()
@@ -40,7 +43,15 @@ struct AttachmentTextEditor: NSViewRepresentable {
         scrollView.documentView = textView
         scrollView.borderType = .noBorder
         scrollView.drawsBackground = false
+        scrollView.automaticallyAdjustsContentInsets = false
+        applyInsets(to: scrollView)
         return scrollView
+    }
+
+    private func applyInsets(to scrollView: NSScrollView) {
+        let insets = NSEdgeInsets(top: topContentInset, left: 0, bottom: bottomContentInset, right: 0)
+        scrollView.contentInsets = insets
+        scrollView.scrollerInsets = insets
     }
 
     private func applyTypography(to textView: AttachDropTextView) {
@@ -89,6 +100,9 @@ struct AttachmentTextEditor: NSViewRepresentable {
         }
         // After the string update so programmatically-set text is restyled too.
         applyTypography(to: textView)
+        if scrollView.contentInsets.top != topContentInset || scrollView.contentInsets.bottom != bottomContentInset {
+            applyInsets(to: scrollView)
+        }
         context.coordinator.parent = self
         textView.onFileDrop = { urls in onFileDrop(urls) }
         textView.onPasteImage = onPasteImage

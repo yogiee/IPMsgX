@@ -17,16 +17,22 @@ struct MessageContentView: View {
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 case .quote(let text):
-                    HStack(alignment: .top, spacing: 8) {
-                        RoundedRectangle(cornerRadius: 1.5)
-                            .fill(Color.secondary.opacity(0.45))
-                            .frame(width: 3)
-                        Text(MessageRenderer.render(text))
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .fixedSize(horizontal: false, vertical: true)
+                    // Blockquote: left border bar over a faint fill.
+                    Text(MessageRenderer.render(text))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .padding(.vertical, 6)
+                        .padding(.leading, 13)
+                        .padding(.trailing, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.secondary.opacity(0.08))
+                        .overlay(alignment: .leading) {
+                            Rectangle()
+                                .fill(Color.secondary.opacity(0.5))
+                                .frame(width: 3)
+                        }
+                        .clipShape(.rect(cornerRadius: 4))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
