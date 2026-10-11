@@ -92,81 +92,80 @@ struct ReceiveWindowContent: View {
                 }
                 .padding()
 
-                Divider()
-
-                // Message body (with seal overlay)
-                ZStack {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 12) {
-                            let sanitized = MessageRenderer.sanitize(viewModel.message.message)
-                            if !sanitized.isEmpty {
-                                MessageContentView(raw: viewModel.message.message)
-                                    .font(SettingsService.shared.messageFont)
-                                    .lineSpacing(SettingsService.shared.messageLineSpacing)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            } else if viewModel.inlineImages.isEmpty, viewModel.hasFileAttachments {
-                                Label(
-                                    viewModel.fileAttachments.count == 1
-                                        ? "1 attachment" : "\(viewModel.fileAttachments.count) attachments",
-                                    systemImage: "paperclip"
-                                )
-                                .foregroundStyle(.secondary)
-                            }
-
-                            // Inline images — stacked, animated (GIF), click for Quick Look.
-                            ForEach(viewModel.inlineImages, id: \.fileID) { img in
-                                InlineImageCell(viewModel: viewModel, attachment: img)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                    }
-
-                    if !viewModel.isSealOpened {
-                        SealCoverView(isLocked: viewModel.message.isLocked) {
-                            viewModel.attemptOpenSeal()
-                        }
-                    }
-                }
-                .frame(maxHeight: .infinity)
-                .task(id: viewModel.isSealOpened) {
-                    // Load inline images once the content is visible (not while sealed).
-                    if viewModel.isSealOpened { await viewModel.loadInlineImages() }
-                }
-
-                // File attachments (inline images are excluded — they show in the body)
-                if viewModel.hasFileAttachments {
-                    Divider()
-                    ScrollView(.horizontal) {
-                        HStack {
-                            ForEach(viewModel.fileAttachments, id: \.fileID) { attach in
-                                Button {
-                                    viewModel.downloadAttachment(attach)
-                                } label: {
-                                    Label(attach.fileName, systemImage: attach.fileType == .directory ? "folder" : "doc")
-                                        .font(.caption)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 6))
+                // Message body (with seal overlay) and file attachments — text sits directly on the
+                // window surface, like typed text in the compose window (no wrapping box).
+                VStack(spacing: 0) {
+                    ZStack {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 12) {
+                                let sanitized = MessageRenderer.sanitize(viewModel.message.message)
+                                if !sanitized.isEmpty {
+                                    MessageContentView(raw: viewModel.message.message)
+                                        .font(SettingsService.shared.messageFont)
+                                        .lineSpacing(SettingsService.shared.messageLineSpacing)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                } else if viewModel.inlineImages.isEmpty, viewModel.hasFileAttachments {
+                                    Label(
+                                        viewModel.fileAttachments.count == 1
+                                            ? "1 attachment" : "\(viewModel.fileAttachments.count) attachments",
+                                        systemImage: "paperclip"
+                                    )
+                                    .foregroundStyle(.secondary)
                                 }
-                                .buttonStyle(.plain)
-                                .help("\(ReceiveViewModel.formattedSize(attach.fileSize)) — Click to download")
+
+                                // Inline images — stacked, animated (GIF), click for Quick Look.
+                                ForEach(viewModel.inlineImages, id: \.fileID) { img in
+                                    InlineImageCell(viewModel: viewModel, attachment: img)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
+                        }
+
+                        if !viewModel.isSealOpened {
+                            SealCoverView(isLocked: viewModel.message.isLocked) {
+                                viewModel.attemptOpenSeal()
                             }
                         }
-                        .padding(.horizontal)
-                        .padding(.vertical, 8)
+                    }
+                    .frame(maxHeight: .infinity)
+                    .task(id: viewModel.isSealOpened) {
+                        // Load inline images once the content is visible (not while sealed).
+                        if viewModel.isSealOpened { await viewModel.loadInlineImages() }
                     }
 
-                    if let error = viewModel.downloadError {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundStyle(.red)
+                    // File attachments (inline images are excluded — they show in the body)
+                    if viewModel.hasFileAttachments {
+                        Divider()
+                        ScrollView(.horizontal) {
+                            HStack {
+                                ForEach(viewModel.fileAttachments, id: \.fileID) { attach in
+                                    Button {
+                                        viewModel.downloadAttachment(attach)
+                                    } label: {
+                                        Label(attach.fileName, systemImage: attach.fileType == .directory ? "folder" : "doc")
+                                            .font(.caption)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 6))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help("\(ReceiveViewModel.formattedSize(attach.fileSize)) — Click to download")
+                                }
+                            }
                             .padding(.horizontal)
-                            .padding(.bottom, 4)
+                            .padding(.vertical, 8)
+                        }
+
+                        if let error = viewModel.downloadError {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                                .padding(.horizontal)
+                                .padding(.bottom, 4)
+                        }
                     }
                 }
-
-                Divider()
 
                 // Reply area
                 if viewModel.showReplyField {
@@ -188,6 +187,7 @@ struct ReceiveWindowContent: View {
                                 viewModel.showReplyField = false
                                 viewModel.replyText = ""
                             }
+                            .floatingButtonStyle()
                             Button("Send Reply") {
                                 Task {
                                     await viewModel.reply()
@@ -195,24 +195,29 @@ struct ReceiveWindowContent: View {
                                 }
                             }
                             .keyboardShortcut(.defaultAction)
+                            .floatingButtonStyle(prominent: true)
                             .disabled(viewModel.replyText.isEmpty)
                         }
+                        .controlSize(.large)
                     }
-                    .padding()
+                    .padding(12)
                 } else {
                     HStack {
                         Spacer()
-                        Button("Reply") {
-                            viewModel.showReplyField = true
-                        }
-                        .keyboardShortcut("r", modifiers: .command)
-
                         Button("Close") {
                             closeWindow()
                         }
                         .keyboardShortcut(.cancelAction)
+                        .floatingButtonStyle()
+
+                        Button("Reply") {
+                            viewModel.showReplyField = true
+                        }
+                        .keyboardShortcut("r", modifiers: .command)
+                        .floatingButtonStyle(prominent: true)
                     }
-                    .padding()
+                    .controlSize(.large)
+                    .padding(16)
                 }
             }
 

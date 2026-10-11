@@ -16,11 +16,16 @@ struct GeneralSettingsView: View {
                     .textFieldStyle(.roundedBorder)
             }
 
-            Section("User List Display") {
-                Toggle("Hostname", isOn: $settings.showHostName)
+            Section {
                 Toggle("IP Address", isOn: $settings.showIPAddress)
-                Toggle("Group Name", isOn: $settings.showGroupName)
                 Toggle("Login Name", isOn: $settings.showLogOnName)
+                Toggle("Hostname", isOn: $settings.showHostName)
+                Toggle("Group Name", isOn: $settings.showGroupName)
+            } header: {
+                Text("User List Details")
+            } footer: {
+                Text("Shown under each name in the New Message sidebar. Hover over a name to see all details.")
+                    .foregroundStyle(.secondary)
             }
 
             Section("Menu Bar") {

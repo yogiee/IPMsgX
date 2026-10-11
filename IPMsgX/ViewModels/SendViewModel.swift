@@ -15,9 +15,6 @@ final class SendViewModel {
     var isLocked: Bool = false
     var searchText: String = ""
 
-    /// Sort order for the user table columns.
-    var sortOrder: [KeyPathComparator<UserInfo>] = [KeyPathComparator(\UserInfo.displayName)]
-
     private let appState: AppState
 
     init(appState: AppState, preselectedUser: UserInfo? = nil) {
@@ -42,9 +39,9 @@ final class SendViewModel {
         }
     }
 
-    /// Users shown in the table — filtered by search, then sorted by the active column order.
+    /// Users shown in the sidebar — filtered by search, sorted by name (Finder-style ordering).
     var displayedUsers: [UserInfo] {
-        filteredUsers.sorted(using: sortOrder)
+        filteredUsers.sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
     }
 
     var groupedUsers: [(String, [UserInfo])] {

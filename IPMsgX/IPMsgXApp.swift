@@ -95,7 +95,8 @@ struct IPMsgXApp: App {
                 .environment(appState)
                 .task { await bootstrap() }
         }
-        .defaultSize(width: 680, height: 560)
+        .defaultSize(width: 980, height: 640)
+        .windowStyle(.hiddenTitleBar)  // title + formatting live in the compose pill
         .commands {
             IPMsgCommands(appState: appState)
         }
@@ -127,6 +128,7 @@ struct IPMsgXApp: App {
             MenuBarView(appState: appState)
         } label: {
             MenuBarLabel()
+                .modifier(WindowRoutingObservers(appState: appState))
         }
         .menuBarExtraStyle(.window)
 
